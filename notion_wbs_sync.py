@@ -34,7 +34,7 @@ Usage:
     → Opens http://localhost:8765 in your browser automatically
 """
 
-import json, os, re, time, threading, webbrowser
+import json, os, re, time, threading, webbrowser, uuid
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template_string
 import requests
@@ -48,6 +48,10 @@ WORK_SESSIONS_DB_ID = "308c193fbba34a1ebe8d817fd72e9d9a"   # ⏱️ Work Session
 
 NOTION_API     = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
+
+# ── In-memory sync job store (polling-based progress) ────────────────────────
+# job_id → {"events": [...], "done": bool, "result": dict|None, "error": str|None}
+_sync_jobs = {}
 
 BASE_DIR               = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE            = os.path.join(BASE_DIR, "notion_sync_config.json")
@@ -332,7 +336,8 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
                       backlink_field="Master WBS",
                       work_type_map=None,
                       auto_calc_planned_start=True,
-                      sessions_mappings=None):
+                      sessions_mappings=None,
+                      emit=None):
     """
     Pull all pages from source_db_id, upsert them into the master WBS Tasks DB.
 
@@ -369,6 +374,8 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
     legacy entries without a db tag are left untouched to avoid false positives.
     """
     pages = query_db(token, source_db_id)
+    if emit:
+        emit({"type": "db_loaded", "task_count": len(pages)})
     created = updated = skipped = deleted = 0
     errors        = []
     new_tasks     = []   # [{master_id, project_id, task_name}] — populated on CREATE only
@@ -431,6 +438,7 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
                 "reason": "No task name / title property found — check column mapping",
             })
             skipped += 1
+            if emit: emit({"type": "task", "task": "(untitled)", "action": "skipped"})
             continue
 
         # Normalise priority
@@ -529,6 +537,7 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
                                       "project_id": project_page_id,
                                       "task_name": task_name})
                     created += 1
+                    if emit: emit({"type": "task", "task": task_name, "action": "created"})
                 else:
                     r.raise_for_status()
                     # Always ensure back-link is written — older entries predate
@@ -547,6 +556,7 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
                         except Exception:
                             pass
                     updated += 1
+                    if emit: emit({"type": "task", "task": task_name, "action": "updated"})
             else:
                 r = notion_request(
                     requests.post,
@@ -564,8 +574,10 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
                                   "project_id": project_page_id,
                                   "task_name": task_name})
                 created += 1
+                if emit: emit({"type": "task", "task": task_name, "action": "created"})
         except Exception as e:
             errors.append(f"'{task_name}': {e}")
+            if emit: emit({"type": "task", "task": task_name, "action": "error", "detail": str(e)})
 
     return {"created": created, "updated": updated,
             "skipped": skipped, "deleted": deleted,
@@ -1079,6 +1091,146 @@ def api_sync():
         total["log_dir"]  = BASE_DIR
 
     return jsonify(total)
+
+
+# ── Polling-based progress endpoints ─────────────────────────────────────────
+@app.route("/api/sync-start", methods=["POST"])
+def api_sync_start():
+    """
+    Start a sync job in a background thread. Returns a job_id immediately.
+    The UI polls /api/sync-status/<job_id> for progress updates.
+    """
+    data    = request.json or {}
+    token   = data.get("token", "").strip()
+    sources = data.get("sources", [])
+
+    if not token:
+        return jsonify({"error": "No token"}), 400
+    if not sources:
+        return jsonify({"error": "No sources selected"}), 400
+
+    job_id = uuid.uuid4().hex[:12]
+    _sync_jobs[job_id] = {"events": [], "done": False, "result": None, "error": None}
+
+    def emit(event):
+        _sync_jobs[job_id]["events"].append(event)
+
+    def run():
+        try:
+            mappings          = load_mappings()
+            sessions_mappings = load_sessions_mappings()
+            total = {"created": 0, "updated": 0, "skipped": 0, "deleted": 0,
+                     "ws_created": 0, "ws_skipped": 0,
+                     "errors": [], "new_tasks": [], "skipped_tasks": []}
+            source_labels = {s["db_id"]: s.get("db_title", "?") for s in sources}
+
+            emit({"type": "start", "total_dbs": len(sources)})
+
+            # ── Phase 1: Project WBS → Master WBS Tasks ───────────────────
+            for db_n, src in enumerate(sources, 1):
+                db_title = source_labels[src["db_id"]]
+                emit({"type": "db_start", "db": db_title,
+                      "db_n": db_n, "total_dbs": len(sources)})
+                try:
+                    wt_map = src.get("work_type_map") or {}
+                    if isinstance(wt_map, str):
+                        try:    wt_map = json.loads(wt_map)
+                        except: wt_map = {}
+
+                    result = sync_one_database(
+                        token, src["db_id"], src["project_id"],
+                        src["field_map"], mappings,
+                        backlink_field=src.get("backlink_field", "Master WBS"),
+                        work_type_map=wt_map,
+                        auto_calc_planned_start=src.get("auto_calc_planned_start", True),
+                        sessions_mappings=sessions_mappings,
+                        emit=emit,
+                    )
+                    total["created"]   += result["created"]
+                    total["updated"]   += result["updated"]
+                    total["skipped"]   += result["skipped"]
+                    total["deleted"]   += result["deleted"]
+                    total["new_tasks"] += result["new_tasks"]
+                    for e in result["errors"]:
+                        total["errors"].append(f"[{db_title}] {e}")
+                    for t in result.get("skipped_tasks", []):
+                        total["skipped_tasks"].append({**t, "source": db_title})
+                    emit({"type": "db_done", "db": db_title,
+                          "created": result["created"], "updated": result["updated"],
+                          "skipped": result["skipped"], "deleted": result["deleted"],
+                          "errors": len(result["errors"])})
+                except Exception as e:
+                    msg = f"[{db_title}] Fatal: {e}"
+                    total["errors"].append(msg)
+                    emit({"type": "db_done", "db": db_title, "created": 0, "updated": 0,
+                          "skipped": 0, "deleted": 0, "errors": 1, "fatal": str(e)})
+
+            save_mappings(mappings)
+
+            # ── Phase 2: Master WBS Tasks → Work Sessions ─────────────────
+            processed_projects = set()
+            unique_srcs = [s for s in sources if s.get("project_id")
+                           and s["project_id"] not in processed_projects
+                           and not processed_projects.add(s["project_id"])]
+            emit({"type": "phase2_start", "project_count": len(unique_srcs)})
+
+            for ws_n, src in enumerate(unique_srcs, 1):
+                db_title   = source_labels[src["db_id"]]
+                project_id = src["project_id"]
+                try:
+                    ws_result = sync_work_sessions_for_project(
+                        token, project_id, sessions_mappings)
+                    total["ws_created"] += ws_result["created"]
+                    total["ws_skipped"] += ws_result["skipped"]
+                    for e in ws_result["errors"]:
+                        total["errors"].append(f"[{db_title} · Sessions] {e}")
+                    emit({"type": "ws_done", "project": db_title,
+                          "n": ws_n, "total": len(unique_srcs),
+                          "created": ws_result["created"],
+                          "skipped": ws_result["skipped"]})
+                except Exception as e:
+                    total["errors"].append(f"[{db_title} · Sessions] Fatal: {e}")
+                    emit({"type": "ws_done", "project": db_title,
+                          "n": ws_n, "total": len(unique_srcs),
+                          "created": 0, "skipped": 0, "error": str(e)})
+
+            save_sessions_mappings(sessions_mappings)
+
+            log_path = write_sync_log(total)
+            if log_path:
+                total["log_file"] = os.path.basename(log_path)
+                total["log_dir"]  = BASE_DIR
+
+            emit({"type": "finished"})
+            _sync_jobs[job_id]["result"] = total
+
+        except Exception as e:
+            _sync_jobs[job_id]["error"] = str(e)
+            emit({"type": "error", "message": str(e)})
+        finally:
+            _sync_jobs[job_id]["done"] = True
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/api/sync-status/<job_id>", methods=["GET"])
+def api_sync_status(job_id):
+    """
+    Poll for progress of a running sync job.
+    Pass ?offset=N to receive only events after index N (avoids re-sending old events).
+    Returns: {events, done, result, error}
+    """
+    job = _sync_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown job_id"}), 404
+    offset = max(0, int(request.args.get("offset", 0)))
+    return jsonify({
+        "events": job["events"][offset:],
+        "done":   job["done"],
+        "result": job["result"],   # None until done
+        "error":  job["error"],
+    })
 
 
 @app.route("/api/sync-work-sessions", methods=["POST"])
@@ -1613,6 +1765,19 @@ HTML_PAGE = """<!DOCTYPE html>
     <button class="btn btn-primary" id="sync-btn" onclick="runSync()" style="min-width:130px;">
       ▶ Sync Now
     </button>
+
+    <!-- Live progress panel — shown while sync is running -->
+    <div id="sync-progress" style="display:none;margin-top:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+        <span id="sync-phase-label" style="font-size:13px;font-weight:600;color:#4a5568;"></span>
+        <span id="sync-task-counter" style="font-size:12px;color:#a0aec0;font-variant-numeric:tabular-nums;"></span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:99px;height:7px;overflow:hidden;margin-bottom:8px;">
+        <div id="sync-progress-bar" style="background:linear-gradient(90deg,#667eea,#764ba2);height:100%;width:0%;transition:width .3s ease;border-radius:99px;"></div>
+      </div>
+      <div id="sync-current-task" style="font-size:12px;color:#718096;margin-bottom:10px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;"></div>
+      <div id="sync-log" style="background:#1a202c;border-radius:6px;padding:8px 10px;font-size:11px;font-family:monospace;max-height:180px;overflow-y:auto;color:#e2e8f0;line-height:1.7;"></div>
+    </div>
   </div>
 
   <div id="result-box">
@@ -2301,6 +2466,100 @@ function buildSourcesList() {
   return sources;
 }
 
+// ── Sync progress helpers ─────────────────────────────────────────────────────
+let _syncState = {};
+
+function _syncLog(text, color) {
+  const log = document.getElementById("sync-log");
+  const line = document.createElement("div");
+  line.style.cssText = `padding:1px 0;border-bottom:1px solid #2d3748;color:${color||"#e2e8f0"};`;
+  line.textContent   = text;
+  log.appendChild(line);
+  while (log.children.length > 300) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+function _syncHandleEvent(evt) {
+  const phaseEl   = document.getElementById("sync-phase-label");
+  const counterEl = document.getElementById("sync-task-counter");
+  const curEl     = document.getElementById("sync-current-task");
+  const bar       = document.getElementById("sync-progress-bar");
+  const pct = (n, t) => t > 0 ? Math.round(n / t * 100) : 0;
+
+  switch (evt.type) {
+    case "start":
+      _syncState = {totalDbs: evt.total_dbs, taskTotal: 0, taskDone: 0};
+      phaseEl.textContent = `Phase 1 of 2 — Master WBS Tasks`;
+      _syncLog(`▶ Syncing ${evt.total_dbs} database(s)…`, "#90cdf4");
+      break;
+
+    case "db_start":
+      _syncState.taskTotal = 0; _syncState.taskDone = 0;
+      phaseEl.textContent  = `Phase 1 of 2 — ${evt.db}  (${evt.db_n}/${evt.total_dbs})`;
+      counterEl.textContent = "Loading tasks…";
+      bar.style.width = "0%";
+      curEl.textContent = "";
+      _syncLog(`📂 ${evt.db}`, "#fbd38d");
+      break;
+
+    case "db_loaded":
+      _syncState.taskTotal  = evt.task_count;
+      counterEl.textContent = `0 / ${evt.task_count}`;
+      break;
+
+    case "task":
+      _syncState.taskDone++;
+      bar.style.width       = pct(_syncState.taskDone, _syncState.taskTotal) + "%";
+      counterEl.textContent = `${_syncState.taskDone} / ${_syncState.taskTotal || "?"}`;
+      curEl.textContent     = evt.task;
+      if (evt.action === "created") _syncLog(`  ✅ ${evt.task}`, "#68d391");
+      else if (evt.action === "error") _syncLog(`  ❌ ${evt.task}: ${evt.detail||""}`, "#fc8181");
+      else if (evt.action === "deleted") _syncLog(`  🗑 ${evt.task}`, "#f6ad55");
+      break;
+
+    case "db_done": {
+      bar.style.width = "100%";
+      const parts = [`✓ ${evt.created} created, ${evt.updated} updated`];
+      if (evt.skipped) parts.push(`${evt.skipped} skipped`);
+      if (evt.deleted) parts.push(`${evt.deleted} deleted`);
+      if (evt.errors)  parts.push(`${evt.errors} error(s)`);
+      _syncLog(parts.join(" · "), "#9ae6b4");
+      break;
+    }
+    case "phase2_start":
+      phaseEl.textContent   = `Phase 2 of 2 — Work Sessions`;
+      bar.style.width       = "0%";
+      counterEl.textContent = `0 / ${evt.project_count} project(s)`;
+      curEl.textContent     = "";
+      _syncLog(`⏱️ Syncing Work Sessions (${evt.project_count} project(s))`, "#90cdf4");
+      break;
+
+    case "ws_done":
+      bar.style.width       = pct(evt.n, evt.total) + "%";
+      counterEl.textContent = `${evt.n} / ${evt.total} project(s)`;
+      curEl.textContent     = evt.project || "";
+      _syncLog(
+        `  ⏱️ ${evt.project}: ${evt.created} created, ${evt.skipped} existed` +
+        (evt.error ? ` ❌ ${evt.error}` : ""),
+        evt.error ? "#fc8181" : "#e2e8f0"
+      );
+      break;
+
+    case "finished":
+      bar.style.width       = "100%";
+      counterEl.textContent = "";
+      curEl.textContent     = "";
+      phaseEl.textContent   = "✓ Sync complete";
+      _syncLog("✅ Done", "#68d391");
+      break;
+
+    case "error":
+      phaseEl.textContent = "⚠ Error";
+      _syncLog(`❌ ${evt.message}`, "#fc8181");
+      break;
+  }
+}
+
 async function runSync() {
   if (!state.token) { alert("Set your token in the Setup tab first."); return; }
   const sources = buildSourcesList();
@@ -2311,7 +2570,54 @@ async function runSync() {
   btn.innerHTML = '<span class="spinner"></span> Syncing…';
   document.getElementById("result-box").classList.remove("show");
 
-  const res = await api("POST", "/api/sync", {token: state.token, sources});
+  // Reset and show progress panel
+  const prog = document.getElementById("sync-progress");
+  prog.style.display = "block";
+  document.getElementById("sync-log").innerHTML = "";
+  document.getElementById("sync-progress-bar").style.width = "0%";
+  document.getElementById("sync-phase-label").textContent = "Starting…";
+  document.getElementById("sync-task-counter").textContent = "";
+  document.getElementById("sync-current-task").textContent = "";
+
+  // Start job
+  let jobId;
+  try {
+    const startRes = await api("POST", "/api/sync-start", {token: state.token, sources});
+    if (startRes.error) {
+      document.getElementById("sync-phase-label").textContent = "✗ " + startRes.error;
+      btn.disabled = false; btn.innerHTML = "▶ Sync Now";
+      return;
+    }
+    jobId = startRes.job_id;
+  } catch(e) {
+    document.getElementById("sync-phase-label").textContent = "✗ Could not start sync";
+    btn.disabled = false; btn.innerHTML = "▶ Sync Now";
+    return;
+  }
+
+  // Poll for progress
+  let offset = 0;
+  let finalResult = null;
+  while (true) {
+    await new Promise(r => setTimeout(r, 500));
+    let status;
+    try {
+      const r = await fetch(`/api/sync-status/${jobId}?offset=${offset}`);
+      status = await r.json();
+    } catch(e) {
+      _syncLog(`❌ Poll error: ${e.message}`, "#fc8181");
+      break;
+    }
+    for (const evt of (status.events || [])) _syncHandleEvent(evt);
+    offset += (status.events || []).length;
+    if (status.done) { finalResult = status.result; break; }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = "▶ Sync Now";
+
+  if (!finalResult) return;
+  const res = finalResult;
 
   btn.disabled = false;
   btn.innerHTML = "▶ Sync Now";
@@ -2535,4 +2841,4 @@ if __name__ == "__main__":
         webbrowser.open("http://localhost:8765")
 
     threading.Thread(target=open_browser, daemon=True).start()
-    app.run(host="127.0.0.1", port=8765, debug=False)
+    app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
