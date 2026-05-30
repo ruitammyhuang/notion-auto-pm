@@ -1,0 +1,132 @@
+╔══════════════════════════════════════════════════════════╗
+║          Notion WBS Sync Tool — Setup Instructions       ║
+╚══════════════════════════════════════════════════════════╝
+
+REQUIREMENTS
+────────────
+• Python 3.8 or later  (check: python3 --version)
+• Internet access
+
+────────────────────────────────────────────────────────────
+STEP 1 — Install dependencies  (one time only)
+────────────────────────────────────────────────────────────
+Open Terminal and run:
+
+    pip3 install flask requests
+
+────────────────────────────────────────────────────────────
+STEP 2 — Create a Notion Integration  (one time only)
+────────────────────────────────────────────────────────────
+1. Go to https://www.notion.so/my-integrations
+2. Click  "+ New integration"
+3. Name it something like "WBS Sync Tool"
+4. Set Associated workspace to YOUR workspace
+5. Under Capabilities, keep the defaults (Read/Update/Insert content)
+6. Click Submit
+7. Copy the "Internal Integration Secret"
+   (looks like:  ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)
+
+Keep this token private — treat it like a password.
+
+────────────────────────────────────────────────────────────
+STEP 3 — Share your Notion databases with the integration
+────────────────────────────────────────────────────────────
+You MUST share each database with the integration or it cannot
+read/write to it. Do this for:
+
+  • 📁 Projects        (in your 🗂️ Workload Tracker page)
+  • 📋 WBS Tasks       (in your 🗂️ Workload Tracker page)
+  • Every project WBS database you want to sync
+    (e.g. "📋 WBS — EDG 6648 Course Design")
+
+For each database:
+  1. Open the database in Notion
+  2. Click ··· (top-right) → Connections
+  3. Find your integration name → click Connect
+
+────────────────────────────────────────────────────────────
+STEP 4 — Run the tool
+────────────────────────────────────────────────────────────
+In Terminal, navigate to the folder containing notion_wbs_sync.py:
+
+    cd /path/to/folder
+
+Then run:
+
+    python3 notion_wbs_sync.py
+
+Your browser will open automatically to http://localhost:8765
+Leave the Terminal window open while using the tool.
+To stop the tool, press Ctrl+C in Terminal.
+
+────────────────────────────────────────────────────────────
+STEP 5 — Configure in the browser UI
+────────────────────────────────────────────────────────────
+1. SETUP tab  →  Paste your integration token → Save & Test
+   You should see "Connected — X project(s) found"
+
+2. SOURCES tab → Click "Discover databases"
+   The tool will list all databases your integration can see.
+
+3. For each project WBS database:
+   • Check the checkbox to include it
+   • Choose which Project it maps to (from your 📁 Projects DB)
+   • Click "Load columns" to see its Notion columns
+   • Map each column to the corresponding master field:
+       Task Name  →  required (the title column of your WBS)
+       Status     →  optional (e.g. "Status")
+       Priority   →  optional (e.g. "Priority")
+       Planned Start → optional (e.g. "Start Date")
+       Planned End   → optional (e.g. "Due Date")
+       Notes      →  optional (e.g. "Notes")
+       Work Type  →  optional (if your WBS has this column)
+   The tool auto-guesses column matches — review and adjust.
+
+4. Click "Save configuration"
+
+5. SYNC tab → Check which databases to sync → Click "Sync Now"
+
+────────────────────────────────────────────────────────────
+HOW SYNCING WORKS
+────────────────────────────────────────────────────────────
+• Only the common master columns are synced — your project-
+  specific columns (Group, Module, Task Type, etc.) are
+  never touched.
+
+• The tool tracks each task by its Notion page ID. Running
+  sync again UPDATES existing master rows — no duplicates.
+
+• Status and Priority values are automatically normalised:
+    "Todo / Not Started / Backlog"    → Not Started
+    "In Progress / Doing / WIP"       → In Progress
+    "Done / Complete / Finished"      → Completed
+    "Deferred / Blocked / On Hold"    → Deferred
+    "Urgent / Critical"               → Urgent
+    "High / Important"                → High
+    "Medium / Normal"                 → Normal
+    "Low / Minor"                     → Low
+
+• Tasks deleted from a source database are NOT automatically
+  removed from the master (preserves your historical log).
+
+────────────────────────────────────────────────────────────
+FILES CREATED BY THE TOOL
+────────────────────────────────────────────────────────────
+notion_sync_config.json   — your token + source configuration
+notion_sync_mappings.json — tracks which source tasks map to
+                            which master rows (for upserts)
+
+Keep these files in the same folder as notion_wbs_sync.py.
+Do not share notion_sync_config.json — it contains your token.
+
+────────────────────────────────────────────────────────────
+TROUBLESHOOTING
+────────────────────────────────────────────────────────────
+"API error 401"  →  Token is wrong or expired. Re-create it.
+"API error 403"  →  Database not shared with the integration.
+                    Re-do Step 3 for that database.
+"No databases found"  →  Integration has no shared databases.
+                         Complete Step 3 first.
+"Port already in use"  →  Another app is on port 8765.
+                          Edit notion_wbs_sync.py, last line,
+                          change port=8765 to port=8766.
