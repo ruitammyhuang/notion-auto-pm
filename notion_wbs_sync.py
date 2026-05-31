@@ -2760,15 +2760,20 @@ async function runQuickAdd() {
   document.getElementById("qs-result-ok").style.display  = "none";
   document.getElementById("qs-result-err").style.display = "none";
 
-  // Convert datetime-local value to ISO-8601 with offset (assume local timezone)
+  // Convert datetime-local value to ISO-8601 with local timezone offset.
+  // IMPORTANT: use local time components (getHours etc.), NOT toISOString()
+  // which returns UTC — that caused times to appear shifted by the UTC offset.
   let sessionStart = "";
   if (startVal) {
-    const d = new Date(startVal);
-    const off = -d.getTimezoneOffset();
+    const d    = new Date(startVal);
+    const pad  = n => String(n).padStart(2, "0");
+    const off  = -d.getTimezoneOffset();          // minutes ahead of UTC
     const sign = off >= 0 ? "+" : "-";
-    const hh = String(Math.floor(Math.abs(off)/60)).padStart(2,"0");
-    const mm = String(Math.abs(off)%60).padStart(2,"0");
-    sessionStart = d.toISOString().slice(0,16) + `${sign}${hh}:${mm}`;
+    const hh   = pad(Math.floor(Math.abs(off) / 60));
+    const mm   = pad(Math.abs(off) % 60);
+    const local = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` +
+                  `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    sessionStart = local + `${sign}${hh}:${mm}`;
   }
 
   const res = await api("POST", "/api/quick-add", {
