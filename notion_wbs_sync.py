@@ -831,7 +831,8 @@ def deduplicate_work_sessions_global(token):
 def quick_add_task(token, source_db_id, project_id, task_name,
                    task_name_field, backlink_field, session_start,
                    due_date="", priority="Normal", work_type="",
-                   planned_end_field="", priority_field="", work_type_field=""):
+                   planned_end_field="", priority_field="", work_type_field="",
+                   category="", category_field=""):
     """
     Create a task simultaneously in three places:
       1. Project WBS database  (source_db_id)
@@ -855,6 +856,9 @@ def quick_add_task(token, source_db_id, project_id, task_name,
             wbs_props[priority_field] = {"select": {"name": norm}}
     if work_type and work_type_field and work_type in VALID_WORK_TYPES:
         wbs_props[work_type_field] = {"select": {"name": work_type}}
+    # Category — Notion auto-creates the option if it's a new value
+    if category and category_field:
+        wbs_props[category_field] = {"select": {"name": category}}
 
     r = requests.post(
         f"{NOTION_API}/pages",
@@ -1428,6 +1432,42 @@ def api_deduplicate():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/wbs-categories", methods=["POST"])
+def api_wbs_categories():
+    """
+    Return the select options for the configured category field of a WBS database.
+    Used by Quick Start to populate the Category dropdown dynamically.
+
+    Body: {token, db_id, category_field}
+    Returns: {options: [{name, color}, ...]}
+    If no category_field is configured, returns {options: []}.
+    """
+    body           = request.json or {}
+    token          = body.get("token", "").strip()
+    db_id          = body.get("db_id", "").strip()
+    category_field = body.get("category_field", "").strip()
+
+    if not token or not db_id:
+        return jsonify({"error": "token and db_id required"}), 400
+    if not category_field:
+        return jsonify({"options": []})
+
+    try:
+        r = requests.get(
+            f"{NOTION_API}/databases/{db_id}",
+            headers=headers(token), timeout=15,
+        )
+        r.raise_for_status()
+        props = r.json().get("properties", {})
+        field = props.get(category_field, {})
+        raw_options = field.get("select", {}).get("options", [])
+        options = [{"name": o["name"], "color": o.get("color", "default")}
+                   for o in raw_options]
+        return jsonify({"options": options, "field_type": field.get("type", "")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/quick-add", methods=["POST"])
 def api_quick_add():
     """Create a task in Project WBS + Master WBS + Work Sessions in one call."""
@@ -1439,12 +1479,14 @@ def api_quick_add():
     task_name_field   = body.get("task_name_field", "Task")
     backlink_field    = body.get("backlink_field", "Master WBS")
     session_start     = body.get("session_start", "")
-    due_date          = body.get("due_date", "")           # "YYYY-MM-DD" or ""
+    due_date          = body.get("due_date", "")
     priority          = body.get("priority", "Normal")
     work_type         = body.get("work_type", "")
-    planned_end_field = body.get("planned_end_field", "")  # column name in Project WBS
+    planned_end_field = body.get("planned_end_field", "")
     priority_field    = body.get("priority_field", "")
     work_type_field   = body.get("work_type_field", "")
+    category          = body.get("category", "").strip()       # selected or new category
+    category_field    = body.get("category_field", "").strip() # column name in WBS
 
     if not all([token, source_db_id, project_id, task_name]):
         return jsonify({"error": "token, source_db_id, project_id, and task_name are all required"}), 400
@@ -1456,6 +1498,8 @@ def api_quick_add():
             planned_end_field=planned_end_field,
             priority_field=priority_field,
             work_type_field=work_type_field,
+            category=category,
+            category_field=category_field,
         )
         return jsonify({"ok": True, **result, "task_name": task_name})
     except requests.HTTPError as e:
@@ -1919,17 +1963,31 @@ HTML_PAGE = """<!DOCTYPE html>
 
     <div class="field-group">
       <label>Project / WBS Database <span class="mapping-req">*</span></label>
-      <select id="qs-source">
+      <select id="qs-source" onchange="onQsSourceChange()">
         <option value="">— select a project —</option>
       </select>
       <div class="field-hint">Only projects configured in the Sources tab appear here.</div>
+    </div>
+
+    <!-- Category field — shown only when the selected WBS has a category mapping -->
+    <div class="field-group" id="qs-category-group" style="display:none;">
+      <label>Category <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-category" onchange="onQsCategoryChange()">
+        <option value="">— loading… —</option>
+      </select>
+      <!-- Shown when "➕ Add new category" is selected -->
+      <input type="text" id="qs-category-new"
+             placeholder="Type new category name…"
+             style="display:none;margin-top:6px;font-size:13px;"
+             oninput="this.value=this.value">
+      <div class="field-hint">Categorise this task for time-tracking analysis. Type a new name to create a category on the fly.</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
       <div class="field-group" style="margin-bottom:0;">
         <label>Due Date <span style="font-weight:400;color:#888;">(optional)</span></label>
         <input type="date" id="qs-due-date" style="font-size:13px;">
-        <div class="field-hint">Synced to the Due Date / Planned End column in the Project WBS and Master WBS.</div>
+        <div class="field-hint">Synced to Due Date in the Project WBS and Master WBS.</div>
       </div>
       <div class="field-group" style="margin-bottom:0;">
         <label>Priority <span style="font-weight:400;color:#888;">(optional)</span></label>
@@ -2793,6 +2851,74 @@ function refreshQuickTab() {
     if (dbId === current) opt.selected = true;
     sel.appendChild(opt);
   }
+  // Reset category panel whenever sources change
+  document.getElementById("qs-category-group").style.display = "none";
+}
+
+// Called when the WBS dropdown changes — load category options for that database
+async function onQsSourceChange() {
+  const dbId = document.getElementById("qs-source").value;
+  const catGroup = document.getElementById("qs-category-group");
+  const catSel   = document.getElementById("qs-category");
+  const catNew   = document.getElementById("qs-category-new");
+
+  catNew.style.display = "none";
+  catNew.value = "";
+
+  if (!dbId || !state.token) {
+    catGroup.style.display = "none";
+    return;
+  }
+
+  const src = state.savedSources[dbId];
+  const categoryField = src?.field_map?.category || "";
+  if (!categoryField) {
+    catGroup.style.display = "none";
+    return;
+  }
+
+  // Show the panel immediately with a loading state
+  catGroup.style.display = "block";
+  catSel.innerHTML = '<option value="">Loading categories…</option>';
+  catSel.disabled = true;
+
+  const res = await api("POST", "/api/wbs-categories", {
+    token: state.token,
+    db_id: dbId,
+    category_field: categoryField,
+  });
+
+  catSel.disabled = false;
+  if (res.error || !res.options) {
+    catSel.innerHTML = '<option value="">— could not load —</option>';
+    return;
+  }
+
+  catSel.innerHTML = '<option value="">— no category —</option>';
+  for (const opt of res.options) {
+    const el = document.createElement("option");
+    el.value       = opt.name;
+    el.textContent = opt.name;
+    catSel.appendChild(el);
+  }
+  // Always add the "new category" option at the end
+  const newOpt = document.createElement("option");
+  newOpt.value       = "__new__";
+  newOpt.textContent = "➕ Add new category…";
+  catSel.appendChild(newOpt);
+}
+
+// Show/hide the free-text input when "Add new category" is chosen
+function onQsCategoryChange() {
+  const val    = document.getElementById("qs-category").value;
+  const catNew = document.getElementById("qs-category-new");
+  if (val === "__new__") {
+    catNew.style.display = "block";
+    catNew.focus();
+  } else {
+    catNew.style.display = "none";
+    catNew.value = "";
+  }
 }
 
 function setQsNow() {
@@ -2807,10 +2933,21 @@ function setQsNow() {
 async function runQuickAdd() {
   const taskName  = (document.getElementById("qs-task-name").value || "").trim();
   const dbId      = document.getElementById("qs-source").value;
-  const startVal  = document.getElementById("qs-start").value;  // "YYYY-MM-DDTHH:MM" or ""
-  const dueDate   = document.getElementById("qs-due-date").value || "";    // "YYYY-MM-DD" or ""
+  const startVal  = document.getElementById("qs-start").value;
+  const dueDate   = document.getElementById("qs-due-date").value || "";
   const priority  = document.getElementById("qs-priority").value || "Normal";
   const workType  = document.getElementById("qs-work-type").value || "";
+
+  // Resolve category: use free-text input if "Add new" was chosen
+  const catSel  = document.getElementById("qs-category");
+  const catNew  = document.getElementById("qs-category-new");
+  let   category = "";
+  if (catSel && catSel.value === "__new__") {
+    category = (catNew.value || "").trim();
+    if (!category) { alert("Please enter a name for the new category."); return; }
+  } else if (catSel) {
+    category = catSel.value || "";
+  }
 
   if (!taskName) { alert("Please enter a task name."); return; }
   if (!dbId)     { alert("Please select a project."); return; }
@@ -2856,6 +2993,8 @@ async function runQuickAdd() {
     planned_end_field: src.field_map?.planned_end || "",
     priority_field:    src.field_map?.priority    || "",
     work_type_field:   src.field_map?.work_type   || "",
+    category:          category,
+    category_field:    src.field_map?.category    || "",
   });
 
   btn.disabled = false;
@@ -2871,6 +3010,12 @@ async function runQuickAdd() {
     document.getElementById("qs-link-master").href = res.master_url || "#";
     document.getElementById("qs-link-ws").href     = res.ws_url     || "#";
     document.getElementById("qs-task-name").value  = "";  // clear for next entry
+    // Reset category to "no category" (keep dropdown open for next quick entry)
+    if (document.getElementById("qs-category").value === "__new__") {
+      document.getElementById("qs-category").value = "";
+      document.getElementById("qs-category-new").style.display = "none";
+      document.getElementById("qs-category-new").value = "";
+    }
   }
 }
 
