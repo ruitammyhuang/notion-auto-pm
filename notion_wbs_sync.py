@@ -235,6 +235,49 @@ def has_logged_hours(token, ws_id):
         return True   # fail-safe: assume hours logged if we can't check
 
 
+# ── Orphaned mapping cleanup ─────────────────────────────────────────────────
+def cleanup_orphaned_mappings(token, all_current_src_ids, mappings, sessions_mappings):
+    """
+    Remove mapping entries whose source WBS page no longer exists in ANY configured
+    database. This handles legacy entries with db=None that the per-database stale
+    detector cannot catch (it only matches entries tagged with its own db ID).
+
+    Called from the sync route AFTER all databases have been processed, so
+    all_current_src_ids is the union of every database's live page IDs.
+
+    Returns: number of orphaned entries cleaned up.
+    """
+    orphaned = [
+        sid for sid, v in mappings.items()
+        if isinstance(v, dict) and v.get("db") is None
+        and sid not in all_current_src_ids
+    ]
+    cleaned = 0
+    for sid in orphaned:
+        master_id = mappings[sid]["master_id"]
+        # Archive Master WBS entry
+        try:
+            requests.patch(f"{NOTION_API}/pages/{master_id}",
+                           headers=headers(token),
+                           json={"archived": True}, timeout=15)
+        except Exception:
+            pass
+        # Cascade: archive Work Session only if no hours logged
+        if sessions_mappings and master_id in sessions_mappings:
+            ws_id = sessions_mappings[master_id]
+            if not has_logged_hours(token, ws_id):
+                try:
+                    requests.patch(f"{NOTION_API}/pages/{ws_id}",
+                                   headers=headers(token),
+                                   json={"archived": True}, timeout=15)
+                except Exception:
+                    pass
+            del sessions_mappings[master_id]
+        del mappings[sid]
+        cleaned += 1
+    return cleaned
+
+
 # ── Work Sessions sync ────────────────────────────────────────────────────────
 def sync_work_sessions_for_project(token, project_page_id, sessions_mappings):
     """
@@ -388,6 +431,8 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
         if isinstance(v, dict) and v.get("db") == source_db_id
         and sid not in current_src_ids
     ]
+    # NOTE: entries with db=None are handled by cleanup_orphaned_mappings()
+    # called from the sync route after ALL databases have been processed.
     for sid in stale_src_ids:
         master_id = mappings[sid]["master_id"]
         # Archive Master WBS entry
@@ -511,6 +556,10 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
         try:
             if src_id in mappings:
                 master_id = mappings[src_id]["master_id"]
+                # Always tag the source db so stale detection works on future syncs.
+                # Legacy entries migrated from the old flat format had db=None,
+                # which caused the stale detector to silently miss deleted tasks.
+                mappings[src_id]["db"] = source_db_id
                 r = notion_request(
                     requests.patch,
                     f"{NOTION_API}/pages/{master_id}",
@@ -582,7 +631,8 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
     return {"created": created, "updated": updated,
             "skipped": skipped, "deleted": deleted,
             "errors": errors, "new_tasks": new_tasks,
-            "skipped_tasks": skipped_tasks}
+            "skipped_tasks": skipped_tasks,
+            "current_src_ids": current_src_ids}  # used by caller for global orphan cleanup
 
 # ── Work Sessions deduplication ───────────────────────────────────────────────
 def _ws_has_date(ws_page):
@@ -1031,6 +1081,7 @@ def api_sync():
     source_labels     = {s["db_id"]: s.get("db_title","?") for s in sources}
 
     # ── Phase 1: Project WBS → Master WBS Tasks ───────────────────────────────
+    all_current_src_ids = set()   # union of live page IDs across all databases
     for src in sources:
         try:
             wt_map = src.get("work_type_map") or {}
@@ -1051,6 +1102,7 @@ def api_sync():
                 auto_calc_planned_start=src.get("auto_calc_planned_start", True),
                 sessions_mappings=sessions_mappings,
             )
+            all_current_src_ids |= result.get("current_src_ids", set())
             total["created"]       += result["created"]
             total["updated"]       += result["updated"]
             total["skipped"]       += result["skipped"]
@@ -1062,6 +1114,11 @@ def api_sync():
                 total["skipped_tasks"].append({**t, "source": source_labels[src["db_id"]]})
         except Exception as e:
             total["errors"].append(f"[{source_labels.get(src['db_id'],'?')}] Fatal: {e}")
+
+    # Clean up legacy db=None entries whose source page no longer exists anywhere
+    orphans = cleanup_orphaned_mappings(
+        token, all_current_src_ids, mappings, sessions_mappings)
+    total["deleted"] += orphans
 
     save_mappings(mappings)
 
@@ -1127,6 +1184,7 @@ def api_sync_start():
             emit({"type": "start", "total_dbs": len(sources)})
 
             # ── Phase 1: Project WBS → Master WBS Tasks ───────────────────
+            all_current_src_ids = set()
             for db_n, src in enumerate(sources, 1):
                 db_title = source_labels[src["db_id"]]
                 emit({"type": "db_start", "db": db_title,
@@ -1146,6 +1204,7 @@ def api_sync_start():
                         sessions_mappings=sessions_mappings,
                         emit=emit,
                     )
+                    all_current_src_ids |= result.get("current_src_ids", set())
                     total["created"]   += result["created"]
                     total["updated"]   += result["updated"]
                     total["skipped"]   += result["skipped"]
@@ -1164,6 +1223,13 @@ def api_sync_start():
                     total["errors"].append(msg)
                     emit({"type": "db_done", "db": db_title, "created": 0, "updated": 0,
                           "skipped": 0, "deleted": 0, "errors": 1, "fatal": str(e)})
+
+            # Clean up legacy db=None orphans after all databases are known
+            orphans = cleanup_orphaned_mappings(
+                token, all_current_src_ids, mappings, sessions_mappings)
+            if orphans:
+                total["deleted"] += orphans
+                emit({"type": "orphans_cleaned", "count": orphans})
 
             save_mappings(mappings)
 
