@@ -327,6 +327,11 @@
     </div>
   </div>
 
+  <div id="sources-bulk-row" style="display:none;margin-bottom:10px;display:flex;gap:8px;align-items:center;">
+    <button class="btn btn-ghost" onclick="selectAllSources(true)"  style="font-size:12px;padding:5px 10px;">☑ Select All</button>
+    <button class="btn btn-ghost" onclick="selectAllSources(false)" style="font-size:12px;padding:5px 10px;">☐ Unselect All</button>
+  </div>
+
   <div id="sources-list"></div>
 
   <div id="save-sources-row" style="display:none;">
@@ -373,6 +378,10 @@
     <div class="hint">
       Select which WBS databases to sync, then click Sync Now.
       Tasks already synced are updated in place — no duplicates created.
+    </div>
+    <div id="sync-bulk-row" style="display:none;margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-ghost" onclick="selectAllSync(true)"  style="font-size:12px;padding:5px 10px;">☑ Select All</button>
+      <button class="btn btn-ghost" onclick="selectAllSync(false)" style="font-size:12px;padding:5px 10px;">☐ Unselect All</button>
     </div>
     <div id="sync-source-list" style="margin-bottom:14px;"></div>
     <button class="btn btn-primary" id="sync-btn" onclick="runSync()" style="min-width:130px;">
@@ -571,6 +580,65 @@
     </div>
     <div id="qs-result-err" style="display:none;font-size:13px;color:#e53e3e;"></div>
   </div>
+
+  <!-- ── Push Changes Back ──────────────────────────────────────────────── -->
+  <hr style="border:none;border-top:1px solid #e8e8e8;margin:28px 0 24px;">
+
+  <div class="card">
+    <h3 style="margin-bottom:4px;">📤 Push Changes Back to WBS</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:18px;">
+      After completing a task — if you renamed it or produced an artifact — push the
+      updated name and/or a resource link back to the Project WBS and Master WBS.
+    </p>
+
+    <div class="field-group">
+      <label>Work Session URL <span class="mapping-req">*</span></label>
+      <input type="text" id="pb-session-url"
+             placeholder="Paste the Notion Work Session page URL"
+             style="font-size:13px;">
+      <div class="field-hint">Open the Work Session in Notion → Copy link → paste here.</div>
+    </div>
+
+    <div class="field-group">
+      <label>Updated Task Name <span style="font-weight:400;color:#888;">(optional — leave blank to use Session Name)</span></label>
+      <input type="text" id="pb-task-name"
+             placeholder="e.g. Plan welcome, icebreaking activity and create guiding slides"
+             style="font-size:13px;">
+      <div class="field-hint">If blank, the task name is read from the Work Session's "Session Name" field.</div>
+    </div>
+
+    <div class="field-group">
+      <label>Artifact / Resource URL <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input type="text" id="pb-artifact-url"
+             placeholder="https://…  (Canvas, Google Slides, Docs, etc.)"
+             style="font-size:13px;">
+    </div>
+
+    <div class="field-group">
+      <label>Artifact Label <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input type="text" id="pb-artifact-label"
+             placeholder="e.g. Canvas Slides  (defaults to &quot;Resource&quot;)"
+             style="font-size:13px;">
+    </div>
+
+    <div class="row" style="margin-top:4px;">
+      <button class="btn btn-primary" id="pb-btn" onclick="runPushToWbs()">📤 Push to WBS</button>
+    </div>
+  </div>
+
+  <div id="pb-result" style="display:none;" class="card">
+    <div id="pb-result-ok" style="display:none;">
+      <p style="font-size:14px;font-weight:600;color:#38a169;margin-bottom:12px;">✓ Changes pushed</p>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+        <a id="pb-link-wbs"    href="#" target="_blank">📋 Open in Project WBS →</a>
+        <a id="pb-link-master" href="#" target="_blank">📋 Open in Master WBS Tasks →</a>
+      </div>
+      <p id="pb-artifact-note" style="font-size:12px;color:#888;margin-top:10px;display:none;"></p>
+      <p id="pb-warning"       style="font-size:12px;color:#d69e2e;margin-top:8px;display:none;"></p>
+    </div>
+    <div id="pb-result-err" style="display:none;font-size:13px;color:#e53e3e;"></div>
+  </div>
+
 </div>
 
 <!-- ── HELP TAB ──────────────────────────────────────────────────────────── -->
@@ -808,8 +876,10 @@ function renderSourceList() {
 
   if (!state.discoveredDbs.length) {
     container.innerHTML = '<p style="color:#888;font-size:13px;">No WBS databases found. Make sure your databases are named starting with "WBS" and are shared with the integration in Notion.</p>';
+    document.getElementById("sources-bulk-row").style.display = "none";
     return;
   }
+  document.getElementById("sources-bulk-row").style.display = "flex";
 
   for (const db of state.discoveredDbs) {
     const saved = state.savedSources[db.id] || {};
@@ -831,7 +901,7 @@ function renderSourceList() {
           ${isChecked?"configured":"not configured"}
         </span>
       </div>
-      <div class="source-card-body ${isChecked?"open":""}" id="body-${db.id}">
+      <div class="source-card-body" id="body-${db.id}">
 
         <!-- Project selection -->
         <div class="field-group">
@@ -923,6 +993,23 @@ function resolveProjectId(dbId) {
       .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,"$1-$2-$3-$4-$5");
   }
   return (document.getElementById("proj-"+dbId)||{}).value || "";
+}
+
+// ── Select / Unselect All ─────────────────────────────────────────────────────
+function selectAllSources(checked) {
+  for (const db of state.discoveredDbs) {
+    const chk = document.getElementById("chk-" + db.id);
+    if (!chk) continue;
+    chk.checked = checked;
+    updateBadge(db.id);
+  }
+}
+
+function selectAllSync(checked) {
+  for (const dbId of Object.keys(state.savedSources)) {
+    const chk = document.getElementById("sync-chk-" + dbId);
+    if (chk) chk.checked = checked;
+  }
 }
 
 function toggleCard(dbId) {
@@ -1088,8 +1175,10 @@ function refreshSyncTab() {
   const entries = Object.entries(state.savedSources);
   if (!entries.length) {
     container.innerHTML = '<p style="color:#888;font-size:13px;">No sources configured yet. Go to the Sources tab to set them up.</p>';
+    document.getElementById("sync-bulk-row").style.display = "none";
     return;
   }
+  document.getElementById("sync-bulk-row").style.display = "flex";
   container.innerHTML = entries.map(([dbId, src]) => `
     <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-weight:400;">
       <input type="checkbox" id="sync-chk-${dbId}" checked style="width:16px;height:16px;">
@@ -1572,6 +1661,63 @@ async function runQuickAdd() {
       document.getElementById("qs-category").value = "";
       document.getElementById("qs-category-new").style.display = "none";
       document.getElementById("qs-category-new").value = "";
+    }
+  }
+}
+
+// ── Push changes back to WBS ──────────────────────────────────────────────────
+async function runPushToWbs() {
+  const sessionUrl   = (document.getElementById("pb-session-url").value   || "").trim();
+  const taskName     = (document.getElementById("pb-task-name").value     || "").trim();
+  const artifactUrl  = (document.getElementById("pb-artifact-url").value  || "").trim();
+  const artifactLabel = (document.getElementById("pb-artifact-label").value || "").trim();
+
+  if (!sessionUrl) { alert("Please paste a Work Session URL."); return; }
+
+  const btn = document.getElementById("pb-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Pushing…';
+
+  document.getElementById("pb-result").style.display    = "none";
+  document.getElementById("pb-result-ok").style.display = "none";
+  document.getElementById("pb-result-err").style.display = "none";
+
+  const res = await api("POST", "/api/push-to-wbs", {
+    token:          state.token,
+    work_session_id: sessionUrl,
+    new_task_name:  taskName,
+    artifact_url:   artifactUrl,
+    artifact_label: artifactLabel,
+  });
+
+  btn.disabled = false;
+  btn.innerHTML = "📤 Push to WBS";
+  document.getElementById("pb-result").style.display = "block";
+
+  if (res.error) {
+    document.getElementById("pb-result-err").style.display  = "block";
+    document.getElementById("pb-result-err").textContent    = "✗ " + res.error;
+  } else {
+    document.getElementById("pb-result-ok").style.display = "block";
+    const wbsLink    = document.getElementById("pb-link-wbs");
+    const masterLink = document.getElementById("pb-link-master");
+    wbsLink.href    = res.wbs_url    || "#";
+    masterLink.href = res.master_url || "#";
+    if (!res.wbs_url) wbsLink.style.display = "none";
+
+    const artNote = document.getElementById("pb-artifact-note");
+    if (res.artifact_saved) {
+      artNote.style.display = "block";
+      artNote.textContent   = `✓ Artifact link saved to Project WBS task.`;
+    } else if (artifactUrl) {
+      artNote.style.display = "block";
+      artNote.textContent   = "Artifact URL was not saved (see warning below).";
+    }
+
+    const warnEl = document.getElementById("pb-warning");
+    if (res.warning) {
+      warnEl.style.display = "block";
+      warnEl.textContent   = "⚠ " + res.warning;
     }
   }
 }

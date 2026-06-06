@@ -110,8 +110,22 @@
   <!-- ARCHITECTURE -->
   <div class="section active" id="arch">
     <div class="sec-label">System Overview</div>
+    <div class="card" style="margin-bottom:12px">
+      <p style="margin:0 0 10px"><strong style="color:var(--text)">Problem</strong></p>
+      <p style="margin:0">A faculty role spans simultaneous, structurally different workstreams &mdash; courses, research projects, service roles, admin &mdash; each with its own planning context. Generic PM tools may not accommodate the diverse structure faculty work actually has. Managing projects in separate Notion WBS databases solves that, but creates a new problem: no unified view, no cross-project status, no way to see what actually needs attention this week.</p>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <p style="margin:0 0 10px"><strong style="color:var(--text)">What Focal does</strong></p>
+      <p style="margin:0">It bridges per-project Notion WBS databases into a single consolidated system &mdash; without restructuring how each project is planned. Tasks sync automatically into a Master task list. Work sessions tie actual time logged to specific tasks and projects. Status propagates up automatically once a session is marked complete.</p>
+    </div>
     <div class="card" style="margin-bottom:20px">
-      <p><strong style="color:var(--text)">Goal:</strong> Automatically track actual workload across a multi-faceted faculty role (Teaching, Research, Program Management, Service, Design) with zero manual data entry overhead &mdash; using Notion as the front-end and a local Python daemon as the automation layer.</p>
+      <p style="margin:0 0 10px"><strong style="color:var(--text)">Core features</strong></p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0">
+        <div><strong style="font-size:12px">🔄 Sync</strong><br><span style="font-size:12px;color:var(--muted)">Pulls tasks from all project WBS databases into one Master list; run on demand or on a schedule.</span></div>
+        <div><strong style="font-size:12px">⚡ Quick Start</strong><br><span style="font-size:12px;color:var(--muted)">Single entry point to log a work session or add a task to any project, without navigating to each WBS.</span></div>
+        <div><strong style="font-size:12px">📌 Focus view</strong><br><span style="font-size:12px;color:var(--muted)">Shows what's overdue and due this week, ranked by urgency, across all work areas.</span></div>
+        <div><strong style="font-size:12px">📊 Workload dashboard</strong><br><span style="font-size:12px;color:var(--muted)">Actual hours logged by project and work type over a selected time window.</span></div>
+      </div>
     </div>
     <div class="sec-label">Three-Layer Architecture</div>
     <div class="arch">

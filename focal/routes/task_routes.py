@@ -11,10 +11,12 @@ import requests
 from flask import Blueprint, jsonify, request
 
 from ..config import (
+    load_config,
+    load_mappings,
     load_sessions_mappings,
     save_sessions_mappings,
 )
-from ..notion_client import NotionClient, extract
+from ..notion_client import NotionClient, extract, p_title
 from ..sync_engine import deduplicate_work_sessions_global
 from ..tasks import quick_add_task
 
@@ -145,6 +147,141 @@ def api_deduplicate():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+# ── Push changes back to WBS ───────────────────────────────────────────────────
+
+@bp.route("/api/push-to-wbs", methods=["POST"])
+def api_push_to_wbs():
+    """
+    Push an updated task name and/or artifact URL from a Work Session back to
+    the corresponding Master WBS task and Project WBS task.
+
+    Body: {
+      token?,            # falls back to saved config
+      work_session_id,   # Notion URL or page ID of the Work Session
+      new_task_name?,    # override; if blank, reads Session Name from Notion
+      artifact_url?,     # external URL to append as a bookmark block to Project WBS task
+      artifact_label?,   # display label for the bookmark (default: "Resource")
+    }
+    """
+    body           = request.json or {}
+    token          = body.get("token", "").strip()
+    if not token:
+        token = load_config().get("token", "").strip()
+    session_url    = body.get("work_session_id", "").strip()
+    new_task_name  = body.get("new_task_name", "").strip()
+    artifact_url   = body.get("artifact_url", "").strip()
+    artifact_label = body.get("artifact_label", "").strip() or "Resource"
+
+    if not token:
+        return jsonify({"error": "No token — save one in the Setup tab first"}), 400
+    if not session_url:
+        return jsonify({"error": "work_session_id required"}), 400
+
+    session_id = _extract_page_id(session_url)
+    if not session_id:
+        return jsonify({"error": f"Could not parse a page ID from: {session_url}"}), 400
+
+    client = NotionClient(token)
+
+    # 1. Fetch the Work Session to read Session Name + Task relation
+    r = client.get_page(session_id)
+    if not r.ok:
+        return jsonify({"error": f"Cannot fetch Work Session ({r.status_code}). "
+                                 "Make sure the Work Sessions DB is shared with your integration."}), 400
+
+    ws_props  = r.json().get("properties", {})
+    sess_name = extract(ws_props.get("Session Name", {})) or ""
+    task_name = new_task_name or sess_name
+    if not task_name:
+        return jsonify({"error": "Could not determine task name — Work Session has no Session Name."}), 400
+
+    task_rels = ws_props.get("Task", {}).get("relation", [])
+    if not task_rels:
+        return jsonify({"error": "Work Session has no linked Task (Master WBS). "
+                                 "Link it in Notion first, then push."}), 400
+
+    master_id = task_rels[0]["id"]
+
+    # 2. Update Master WBS task name
+    try:
+        mr = client.patch_page(master_id, {"properties": {"Task Name": p_title(task_name)}})
+        mr.raise_for_status()
+    except Exception as e:
+        return jsonify({"error": f"Failed to update Master WBS task: {e}"}), 500
+
+    master_url = f"https://app.notion.com/p/{master_id.replace('-', '')}"
+
+    # 3. Find the Project WBS task via inverted focal_mappings
+    mappings = load_mappings()
+    config   = load_config()
+    sources  = config.get("sources", {})
+
+    inverted: dict[str, dict] = {}
+    for src_page, info in mappings.items():
+        mid = info.get("master_id", "")
+        if mid:
+            inverted[mid] = {"source_page_id": src_page, "db_id": info.get("db", "")}
+
+    wbs_url       = None
+    artifact_saved = False
+
+    wbs_info = inverted.get(master_id)
+    if wbs_info:
+        src_page_id     = wbs_info["source_page_id"]
+        db_id           = wbs_info["db_id"]
+        task_name_field = sources.get(db_id, {}).get("field_map", {}).get("task_name", "Task")
+
+        # Update Project WBS task name
+        try:
+            wr = client.patch_page(src_page_id,
+                                   {"properties": {task_name_field: p_title(task_name)}})
+            wr.raise_for_status()
+            wbs_url = f"https://app.notion.com/p/{src_page_id.replace('-', '')}"
+        except Exception as e:
+            return jsonify({"error": f"Updated Master WBS but failed on Project WBS: {e}",
+                            "master_url": master_url}), 500
+
+        # Append artifact URL as a bookmark block to the Project WBS task body
+        if artifact_url:
+            try:
+                caption = ([{"type": "text", "text": {"content": artifact_label}}]
+                           if artifact_label != "Resource" else [])
+                client.append_block_children(src_page_id, [{
+                    "type": "bookmark",
+                    "bookmark": {"url": artifact_url, "caption": caption},
+                }])
+                artifact_saved = True
+            except Exception as e:
+                # Non-fatal — names updated, just note the bookmark failure
+                return jsonify({
+                    "ok": True,
+                    "task_name":     task_name,
+                    "master_url":    master_url,
+                    "wbs_url":       wbs_url,
+                    "artifact_saved": False,
+                    "warning": f"Names updated, but could not save bookmark: {e}",
+                })
+    else:
+        # Master WBS updated but no mapping found for Project WBS
+        return jsonify({
+            "ok": True,
+            "task_name":     task_name,
+            "master_url":    master_url,
+            "wbs_url":       None,
+            "artifact_saved": False,
+            "warning": ("Master WBS task name updated. Project WBS task not found in mappings — "
+                        "run a Sync first so the mapping file is populated."),
+        })
+
+    return jsonify({
+        "ok":            True,
+        "task_name":     task_name,
+        "master_url":    master_url,
+        "wbs_url":       wbs_url,
+        "artifact_saved": artifact_saved,
+    })
 
 
 # ── Project page link ──────────────────────────────────────────────────────────
