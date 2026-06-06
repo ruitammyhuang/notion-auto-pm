@@ -1,9 +1,10 @@
 # Notion token and sensitive config — NEVER commit these
-notion_sync_config.json
+focal_config.json
 
 # Auto-generated mapping files — rebuilt by Sync Now, not needed in version control
-notion_sync_mappings.json
-notion_sessions_mappings.json
+focal_mappings.json
+focal_sessions_mappings.json
+focus-task-list-cache.json
 
 # Sync log files (timestamped, generated on errors)
 sync_log_*.txt

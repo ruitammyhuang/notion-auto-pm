@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focal — Faculty Project &amp; Workload Hub</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    background: #f5f5f0;
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #fff;
+    border-bottom: 1px solid #e8e8e0;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .sub { font-size: 13px; color: #777; margin-top: 2px; }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 24px;
+    background: #fff;
+    border-bottom: 1px solid #e8e8e0;
+  }
+  .tab {
+    padding: 10px 18px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+    color: #666;
+    transition: all .15s;
+  }
+  .tab.active { color: #2383e2; border-bottom-color: #2383e2; }
+  .tab:hover:not(.active) { color: #333; }
+
+  .pane { display: none; padding: 24px; max-width: 860px; }
+  .pane.active { display: block; }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e8e8e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .card .hint { font-size: 12px; color: #888; margin-bottom: 14px; line-height: 1.5; }
+
+  label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 13px; }
+
+  input[type=text], input[type=password], select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fafafa;
+    transition: border .15s;
+  }
+  input[type=text]:focus, input[type=password]:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #2383e2;
+    background: #fff;
+  }
+  textarea { font-family: monospace; resize: vertical; min-height: 56px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity .15s, background .15s;
+  }
+  .btn:hover { opacity: .88; }
+  .btn-primary { background: #2383e2; color: #fff; }
+  .btn-ghost { background: #f0f0ec; color: #333; }
+  .btn-success { background: #38a169; color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-blue { background: #dbeafe; color: #1d4ed8; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-gray { background: #f3f4f6; color: #374151; }
+
+  .source-card {
+    background: #fff;
+    border: 1px solid #e8e8e0;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .source-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .source-card-header:hover { background: #fafaf8; }
+  .source-card-header input[type=checkbox] { width: 16px; height: 16px; flex-shrink: 0; }
+  .source-card-title { font-weight: 600; flex: 1; }
+  .source-card-body {
+    display: none;
+    padding: 16px;
+    border-top: 1px solid #f0f0ec;
+    background: #fafaf8;
+  }
+  .source-card-body.open { display: block; }
+
+  .mapping-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 8px 12px;
+    align-items: center;
+  }
+  .mapping-label { font-size: 12px; font-weight: 500; color: #555; }
+  .mapping-req { color: #e53e3e; }
+
+  .divider { border: none; border-top: 1px solid #e8e8e0; margin: 14px 0; }
+
+  .field-group { margin-bottom: 14px; }
+  .field-group label { margin-bottom: 4px; }
+  .field-hint { font-size: 11px; color: #999; margin-top: 4px; line-height: 1.4; }
+
+  .proj-manual {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .proj-manual label {
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+    margin: 0;
+    font-weight: 400;
+  }
+
+  #result-box {
+    background: #fff;
+    border: 1px solid #e8e8e0;
+    border-radius: 8px;
+    padding: 20px;
+    display: none;
+  }
+  #result-box.show { display: block; }
+  .result-stat { display: flex; gap: 24px; margin-bottom: 12px; }
+  .result-num { font-size: 28px; font-weight: 700; }
+  .result-num.green { color: #38a169; }
+  .result-num.blue  { color: #2383e2; }
+  .result-num.gray  { color: #999; }
+  .result-num.red   { color: #e53e3e; }
+  .result-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+
+  .detail-list {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .detail-list li { margin-left: 16px; margin-bottom: 5px; line-height: 1.5; }
+  .detail-list strong { display: block; margin-bottom: 6px; font-size: 12px; }
+
+  .error-list {
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    color: #742a2a;
+  }
+  .error-list a { color: #742a2a; }
+
+  .skipped-list {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #78350f;
+  }
+  .skipped-list a { color: #92400e; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .notice {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .notice-info  { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+  .notice-warn  { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
+
+  a { color: #2383e2; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .step {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+  }
+  .step-num {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: #2383e2;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step-body { line-height: 1.6; font-size: 13px; }
+  .step-body code {
+    background: #f0f0ec;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+  }
+  hr { border: none; border-top: 1px solid #e8e8e0; margin: 16px 0; }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .checkbox-row input[type=checkbox] { width: 15px; height: 15px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Focal</h1>
+    <div class="sub">Faculty Project &amp; Workload Hub</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <a href="/workload" style="padding:7px 14px;border-radius:6px;background:#7c3aed;color:#fff;text-decoration:none;font-size:13px;font-weight:500;">📊 Workload</a>
+    <a href="/focus"    style="padding:7px 14px;border-radius:6px;background:#2563eb;color:#fff;text-decoration:none;font-size:13px;font-weight:500;">📌 Focus Tasks</a>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('setup')">⚙️ Setup</div>
+  <div class="tab" onclick="switchTab('sources')">🗂 Sources</div>
+  <div class="tab" onclick="switchTab('sync')">▶️ Sync</div>
+  <div class="tab" onclick="switchTab('quick')">⚡ Quick Start</div>
+  <div class="tab" onclick="switchTab('help')">❓ Help</div>
+  <div class="tab" onclick="window.open('/design','_blank')">📐 Design Doc</div>
+</div>
+
+<!-- ── SETUP TAB ─────────────────────────────────────────────────────────── -->
+<div id="pane-setup" class="pane active">
+  <div class="card">
+    <h3>Notion Integration Token</h3>
+    <div class="hint">
+      Your token authenticates this tool with Notion. It stays on your computer — never sent anywhere else.<br>
+      <a href="https://www.notion.so/my-integrations" target="_blank">Create an integration →</a>
+      then copy the Internal Integration Secret (starts with <code>ntn_</code> or <code>secret_</code>).
+    </div>
+    <label>Token</label>
+    <input type="password" id="token-input" placeholder="ntn_xxxxxxxxxxxxxxxxxxxx" />
+    <div class="row">
+      <button class="btn btn-primary" onclick="saveToken()">Save &amp; Test Connection</button>
+      <span id="token-status" style="font-size:13px;color:#666;"></span>
+    </div>
+  </div>
+
+  <div class="notice notice-warn">
+    <strong>Important:</strong> You must share each source database <em>and</em> the master databases
+    (📁 Projects, 📋 Master WBS Tasks) with your integration in Notion.
+    Open each database → click <strong>···</strong> → <strong>Connections</strong> → add your integration.
+  </div>
+</div>
+
+<!-- ── SOURCES TAB ───────────────────────────────────────────────────────── -->
+<div id="pane-sources" class="pane">
+  <div class="card">
+    <h3>Discover &amp; Configure WBS Databases</h3>
+    <div class="hint">
+      Click Discover to find all your WBS databases. Only databases whose title starts with
+      <strong>WBS</strong> are included — name your databases <em>WBS - Project Title</em>
+      and they will appear here automatically.
+    </div>
+    <div class="row" style="margin-top:0;">
+      <button class="btn btn-primary" id="discover-btn" onclick="discoverDatabases()">
+        Discover WBS databases
+      </button>
+      <span id="discover-status" style="font-size:13px;color:#666;"></span>
+    </div>
+  </div>
+
+  <div id="sources-list"></div>
+
+  <div id="save-sources-row" style="display:none;">
+    <button class="btn btn-success" onclick="saveSourceConfig()">💾 Save configuration</button>
+    <span id="save-status" style="font-size:13px;color:#666;margin-left:10px;"></span>
+  </div>
+</div>
+
+<!-- ── SYNC TAB ──────────────────────────────────────────────────────────── -->
+<div id="pane-sync" class="pane">
+
+  <div class="card" style="border-color:#c7d2fe;background:#eef2ff;">
+    <h3 style="color:#3730a3;">↩ Write-back Dates to Project WBS</h3>
+    <div class="hint" style="color:#4338ca;">
+      Reads the current Planned Start and Due Date from every task in Master WBS Tasks
+      and writes them back to the matching row in each Project WBS database.
+      Run this after rescheduling tasks in Master WBS so both tables stay in sync.
+    </div>
+    <div class="row" style="margin-top:0;">
+      <button class="btn" style="background:#4f46e5;color:#fff;" id="writeback-btn" onclick="runWriteback()">
+        ↩ Write-back Dates
+      </button>
+      <span id="writeback-status" style="font-size:13px;color:#666;"></span>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+    <h3 style="color:#92400e;">🧹 Deduplicate Work Sessions</h3>
+    <div class="hint" style="color:#78350f;">
+      Scans the entire Work Sessions database and removes duplicate rows for the same task.
+      Sessions with a logged start/end time are always kept. Empty duplicates are archived.
+      Run this once to clean up existing duplicates; future syncs won't create new ones.
+    </div>
+    <div class="row" style="margin-top:0;">
+      <button class="btn" style="background:#d97706;color:#fff;" id="dedup-btn" onclick="runDedup()">
+        🧹 Remove Duplicates
+      </button>
+      <span id="dedup-status" style="font-size:13px;color:#666;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Sync to Master WBS Tasks</h3>
+    <div class="hint">
+      Select which WBS databases to sync, then click Sync Now.
+      Tasks already synced are updated in place — no duplicates created.
+    </div>
+    <div id="sync-source-list" style="margin-bottom:14px;"></div>
+    <button class="btn btn-primary" id="sync-btn" onclick="runSync()" style="min-width:130px;">
+      ▶ Sync Now
+    </button>
+
+    <!-- Live progress panel — shown while sync is running -->
+    <div id="sync-progress" style="display:none;margin-top:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+        <span id="sync-phase-label" style="font-size:13px;font-weight:600;color:#4a5568;"></span>
+        <span id="sync-task-counter" style="font-size:12px;color:#a0aec0;font-variant-numeric:tabular-nums;"></span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:99px;height:7px;overflow:hidden;margin-bottom:8px;">
+        <div id="sync-progress-bar" style="background:linear-gradient(90deg,#667eea,#764ba2);height:100%;width:0%;transition:width .3s ease;border-radius:99px;"></div>
+      </div>
+      <div id="sync-current-task" style="font-size:12px;color:#718096;margin-bottom:10px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;"></div>
+      <div id="sync-log" style="background:#1a202c;border-radius:6px;padding:8px 10px;font-size:11px;font-family:monospace;max-height:180px;overflow-y:auto;color:#e2e8f0;line-height:1.7;"></div>
+    </div>
+  </div>
+
+  <div id="result-box">
+    <!-- Master WBS stats -->
+    <div style="font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">
+      📋 Master WBS Tasks
+    </div>
+    <div class="result-stat">
+      <div>
+        <div class="result-num green" id="r-created">—</div>
+        <div class="result-label">Created</div>
+      </div>
+      <div>
+        <div class="result-num blue" id="r-updated">—</div>
+        <div class="result-label">Updated</div>
+      </div>
+      <div>
+        <div class="result-num gray" id="r-skipped">—</div>
+        <div class="result-label">Skipped</div>
+      </div>
+      <div>
+        <div class="result-num" style="color:#dd6b20;" id="r-deleted">—</div>
+        <div class="result-label">Deleted</div>
+      </div>
+    </div>
+
+    <!-- Work Sessions stats -->
+    <div style="font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px;">
+      ⏱️ Work Sessions
+    </div>
+    <div class="result-stat">
+      <div>
+        <div class="result-num green" id="r-ws-created">—</div>
+        <div class="result-label">Created</div>
+      </div>
+      <div>
+        <div class="result-num gray" id="r-ws-skipped">—</div>
+        <div class="result-label">Already existed</div>
+      </div>
+    </div>
+
+    <!-- Errors -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #f0f0ec;">
+      <div class="result-stat" style="margin-bottom:0;">
+        <div>
+          <div class="result-num red" id="r-errors-count">—</div>
+          <div class="result-label">Errors</div>
+        </div>
+      </div>
+    </div>
+    <div id="r-errors-list" style="display:none;" class="detail-list error-list"></div>
+    <div id="r-skipped-list" style="display:none;" class="detail-list skipped-list"></div>
+    <div id="r-log-notice" style="display:none;margin-top:10px;font-size:12px;color:#666;">
+      📄 Log saved: <span id="r-log-file" style="font-family:monospace;"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── QUICK START TAB ──────────────────────────────────────────────────── -->
+<div id="pane-quick" class="pane">
+  <div class="card">
+    <h3>⚡ Quick Start a Task</h3>
+    <div class="hint">
+      Add a new task to a project and begin a Work Session in one click.
+      The task is created in the Project WBS, Master WBS Tasks, and Work Sessions simultaneously.
+      If you're already mid-task and just want to log time, open Work Sessions in Notion and add a row manually instead.
+    </div>
+
+    <div class="field-group">
+      <label>Task Name <span class="mapping-req">*</span></label>
+      <input type="text" id="qs-task-name" placeholder="e.g. Review participant data for RQ2">
+    </div>
+
+    <div class="field-group">
+      <label>Project / WBS Database <span class="mapping-req">*</span></label>
+      <select id="qs-source" onchange="onQsSourceChange()">
+        <option value="">— select a project —</option>
+      </select>
+      <div class="field-hint">Only projects configured in the Sources tab appear here.</div>
+    </div>
+
+    <!-- Category field — shown only when the selected WBS has a category mapping -->
+    <div class="field-group" id="qs-category-group" style="display:none;">
+      <label>Category <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-category" onchange="onQsCategoryChange()">
+        <option value="">— loading… —</option>
+      </select>
+      <input type="text" id="qs-category-new"
+             placeholder="Type new category name…"
+             style="display:none;margin-top:6px;font-size:13px;"
+             oninput="this.value=this.value">
+      <div class="field-hint">Categorise this task for time-tracking analysis. Type a new name to create a category on the fly.</div>
+    </div>
+
+    <!-- Service Level — shown when the WBS has a level field mapped (e.g. Professional Services) -->
+    <div class="field-group" id="qs-level-group" style="display:none;">
+      <label>Service Level <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-level" onchange="onQsLevelChange()">
+        <option value="">— loading… —</option>
+      </select>
+      <input type="text" id="qs-level-new"
+             placeholder="Type new level name…"
+             style="display:none;margin-top:6px;font-size:13px;">
+      <div class="field-hint">Select the service tier for this task.</div>
+    </div>
+
+    <!-- Organization / Division — shown when the WBS has an org_division field mapped -->
+    <div class="field-group" id="qs-orgdiv-group" style="display:none;">
+      <label>Organization / Division <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-orgdiv" onchange="onQsOrgDivChange()">
+        <option value="">— loading… —</option>
+      </select>
+      <input type="text" id="qs-orgdiv-new"
+             placeholder="Type organization or division name…"
+             style="display:none;margin-top:6px;font-size:13px;">
+      <div class="field-hint">Select an existing org/division or type a new one.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="field-group" style="margin-bottom:0;">
+        <label>Due Date <span style="font-weight:400;color:#888;">(optional)</span></label>
+        <input type="date" id="qs-due-date" style="font-size:13px;">
+        <div class="field-hint">Synced to Due Date in the Project WBS and Master WBS.</div>
+      </div>
+      <div class="field-group" style="margin-bottom:0;">
+        <label>Priority <span style="font-weight:400;color:#888;">(optional)</span></label>
+        <select id="qs-priority">
+          <option value="Normal" selected>Normal (default)</option>
+          <option value="Urgent">🔴 Urgent</option>
+          <option value="High">🟠 High</option>
+          <option value="Low">🔵 Low</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-top:14px;">
+      <label>Work Type <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-work-type">
+        <option value="">— leave blank —</option>
+        <option value="🔵 Deep Work">🔵 Deep Work</option>
+        <option value="🟡 Meeting &amp; Call">🟡 Meeting &amp; Call</option>
+        <option value="🟠 Admin &amp; Ops">🟠 Admin &amp; Ops</option>
+        <option value="🟢 Communication">🟢 Communication</option>
+      </select>
+      <div class="field-hint">Sets Work Type on the Master WBS task so time-tracking by type is pre-filled.</div>
+    </div>
+
+    <div class="field-group">
+      <label>Due Date <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input type="date" id="qs-due-date" style="font-size:13px;">
+      <div class="field-hint">Written to both the Project WBS and Master WBS Tasks.</div>
+    </div>
+
+    <div class="field-group">
+      <label>Session Start <span style="font-weight:400;color:#888;">(leave blank to fill in Notion later)</span></label>
+      <input type="datetime-local" id="qs-start" style="font-size:13px;">
+      <div class="row" style="margin-top:6px;">
+        <button class="btn btn-ghost" onclick="setQsNow()" style="font-size:12px;padding:5px 10px;">Use Now</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:4px;">
+      <button class="btn btn-primary" id="qs-btn" onclick="runQuickAdd()">⚡ Add Task &amp; Start Session</button>
+    </div>
+  </div>
+
+  <div id="qs-result" style="display:none;" class="card">
+    <div id="qs-result-ok" style="display:none;">
+      <p style="font-size:14px;font-weight:600;color:#38a169;margin-bottom:12px;">✓ Task created in all three places</p>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+        <a id="qs-link-wbs"    href="#" target="_blank">📋 Open in Project WBS →</a>
+        <a id="qs-link-master" href="#" target="_blank">📋 Open in Master WBS Tasks →</a>
+        <a id="qs-link-ws"     href="#" target="_blank">⏱️ Open Work Session →</a>
+      </div>
+      <p style="font-size:12px;color:#888;margin-top:10px;">
+        Remember to set the Session End time in Notion when you finish.
+      </p>
+    </div>
+    <div id="qs-result-err" style="display:none;font-size:13px;color:#e53e3e;"></div>
+  </div>
+</div>
+
+<!-- ── HELP TAB ──────────────────────────────────────────────────────────── -->
+<div id="pane-help" class="pane">
+  <div class="card">
+    <h3>How to set this up (first time)</h3>
+    <br>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        Go to <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a>
+        and click <strong>+ New integration</strong>. Give it a name (e.g. "WBS Sync"),
+        set the workspace, and click Submit. Copy the <strong>Internal Integration Secret</strong>.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        Paste the token into the <strong>Setup</strong> tab and click Save &amp; Test.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        Name every project WBS database starting with <strong>WBS</strong> —
+        e.g. <code>WBS - EDG 6648 Instruction</code>.
+        In Notion, open each WBS database → click <strong>···</strong> → <strong>Connections</strong>
+        → add your integration. Do the same for the <strong>📁 Projects</strong> and
+        <strong>📋 Master WBS Tasks</strong> databases.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        Go to the <strong>Sources</strong> tab → click <strong>Discover WBS databases</strong>.
+        Only databases starting with "WBS" appear — no filtering needed.
+        Map each database's columns, choose its project (dropdown or paste page ID), and click
+        <strong>Save configuration</strong>.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        Go to the <strong>Sync</strong> tab → click <strong>Sync Now</strong>.
+        Run again anytime you update your project WBS databases.
+      </div>
+    </div>
+
+    <hr>
+    <h3>Why does my project not appear in the dropdown?</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      The dropdown only shows pages that are rows in the <strong>📁 Projects</strong> database.
+      If your project lives as a standalone page (e.g. inside a Teaching &amp; Mentoring hub),
+      it won't appear there.<br><br>
+      <strong>Fix:</strong> use the <em>"Or paste page ID"</em> field below the dropdown.
+      Open the project page in Notion, click <strong>···</strong> → <strong>Copy link</strong>,
+      then extract the 32-character ID from the URL (the last segment before any <code>?</code>).
+      Paste it into the manual ID field — the dropdown selection is ignored when a manual ID is present.
+    </p>
+
+    <hr>
+    <h3>What gets synced</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      A single <strong>Sync Now</strong> run does the full three-layer sync automatically:<br><br>
+      <strong>Phase 1 — Project WBS → Master WBS Tasks.</strong>
+      Syncs Task Name, Priority, Planned Start, Planned End, Notes, and Work Type.
+      Status is set once on first create and never overwritten afterward, preserving
+      Auto Status and any manual edits.<br><br>
+      <strong>Phase 2 — Master WBS Tasks → Work Sessions.</strong>
+      Creates one Work Session row per Master WBS task (Project + Task relation only).
+      Tasks that already have a session are skipped — re-running is always safe.<br><br>
+      Each task is tracked by its Notion page ID, so running sync again will <em>update</em>
+      existing rows rather than create duplicates.
+    </p>
+
+    <hr>
+    <h3>Back-link / Master WBS relation</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      After creating a new Master WBS entry, the tool automatically writes the page ID
+      back into the source WBS row's <strong>Master WBS</strong> relation field (configurable
+      per source). This keeps the two databases bi-directionally linked and makes the
+      <em>Auto Status</em> rollup populate immediately without any manual linking.
+    </p>
+
+    <hr>
+    <h3>Work Type override map</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      If your source WBS has a Category column instead of a Work Type column, paste a
+      JSON map in the <em>Work Type override</em> field to translate automatically:<br>
+      <code>{"Weekly Announcement": "🟢 Communication", "Grading": "🔵 Deep Work"}</code><br><br>
+      Valid master Work Type values: <strong>🔵 Deep Work</strong>, <strong>🟡 Meeting &amp; Call</strong>,
+      <strong>🟠 Admin &amp; Ops</strong>, <strong>🟢 Communication</strong>.
+    </p>
+
+    <hr>
+    <h3>Auto Planned Start</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      When enabled (default), if a task has no Planned Start but has a Due Date (Planned End),
+      Planned Start is automatically set to <strong>Due Date − 7 calendar days</strong>.
+      Uncheck per source if your WBS already has explicit start dates for every task.
+    </p>
+
+    <hr>
+    <h3>Dynamic task deletion &amp; renaming</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      When you delete or rename tasks in a project WBS, those changes flow through automatically on the next sync run:<br><br>
+      <strong>Deleted task:</strong> The corresponding Master WBS entry is archived (moved to Notion Trash),
+      and its linked Work Session is archived as well. Both are removed from the mapping files so they won't
+      reappear on future syncs.<br><br>
+      <strong>Renamed task:</strong> The Master WBS entry's Task Name is updated to match, and the linked
+      Work Session's Session Name is updated too — keeping all three layers consistent with no manual work.<br><br>
+      <em>Note:</em> Only tasks that were synced with the current version of the tool (v2 mappings format)
+      participate in deletion detection. Legacy entries synced before this feature was added are left untouched
+      until their next sync run, which will tag them automatically.
+    </p>
+
+    <hr>
+    <h3>How status flows</h3>
+    <br>
+    <p style="font-size:13px;line-height:1.7;color:#444;">
+      There is no manual Status column anywhere. Status is entirely automatic:<br><br>
+      <strong>Work Session</strong> (In Progress / Completed) →
+      <strong>Master WBS Auto Status</strong> (formula, updates instantly) →
+      <strong>Project WBS Auto Status</strong> (rollup via Master WBS relation, updates instantly).<br><br>
+      To start a task: create a Work Session linked to the Master WBS entry.
+      To complete it: mark the Work Session Completed. Both the master list and project WBS reflect the change immediately.
+    </p>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let state = {
+  token: "",
+  discoveredDbs: [],
+  projects: [],            // [{id, name}] — from 📁 Projects database
+  savedSources: {},        // db_id → {project_id, field_map, db_title,
+                           //          work_type_map, backlink_field, auto_calc_planned_start}
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const cfg = await api("GET", "/api/config");
+  if (cfg.token) {
+    state.token = cfg.token;
+    document.getElementById("token-input").value = cfg.token;
+    setStatus("token-status", "✓ Token loaded", "green");
+  }
+  if (cfg.sources) {
+    state.savedSources = cfg.sources;
+  }
+  refreshSyncTab();
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {"Content-Type":"application/json"} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+function setStatus(id, msg, color="gray") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color === "green" ? "#38a169"
+                 : color === "red"   ? "#e53e3e"
+                 : "#666";
+}
+
+// ── Setup tab ─────────────────────────────────────────────────────────────────
+async function saveToken() {
+  const token = document.getElementById("token-input").value.trim();
+  if (!token) { setStatus("token-status","Enter a token first","red"); return; }
+  setStatus("token-status", "Testing…");
+
+  const test = await api("POST", "/api/test-token", {token});
+  if (test.error) {
+    setStatus("token-status", "✗ " + test.error, "red");
+    return;
+  }
+  state.token = token;
+
+  const cfg = await api("GET", "/api/config");
+  cfg.token = token;
+  await api("POST", "/api/config", cfg);
+
+  const pr = await api("POST", "/api/projects", {token});
+  if (pr.error) {
+    setStatus("token-status",
+      `✓ Token valid${test.name ? " (" + test.name + ")" : ""} — ` +
+      `Projects database not accessible yet (share it with the integration in Notion)`, "green");
+  } else {
+    state.projects = pr.projects;
+    setStatus("token-status",
+      `✓ Connected${test.name ? " (" + test.name + ")" : ""} — ${pr.projects.length} project(s) in dropdown`, "green");
+  }
+}
+
+// ── Sources tab ───────────────────────────────────────────────────────────────
+async function discoverDatabases() {
+  if (!state.token) { alert("Save your token first in the Setup tab."); return; }
+  const btn = document.getElementById("discover-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(0,0,0,.2)"></span> Discovering…';
+  setStatus("discover-status","");
+
+  // Try to load projects — non-fatal if unavailable
+  if (!state.projects.length) {
+    const pr = await api("POST","/api/projects",{token:state.token});
+    if (!pr.error) state.projects = pr.projects;
+  }
+
+  const res = await api("POST","/api/discover",{token:state.token});
+  btn.disabled = false;
+  btn.textContent = "Discover databases";
+
+  if (res.error) { setStatus("discover-status","Error: "+res.error,"red"); return; }
+  state.discoveredDbs = res.databases;
+  setStatus("discover-status", `Found ${res.databases.length} WBS database(s)`);
+  renderSourceList();
+  document.getElementById("save-sources-row").style.display = "block";
+}
+
+function renderSourceList() {
+  const container = document.getElementById("sources-list");
+  container.innerHTML = "";
+
+  if (!state.discoveredDbs.length) {
+    container.innerHTML = '<p style="color:#888;font-size:13px;">No WBS databases found. Make sure your databases are named starting with "WBS" and are shared with the integration in Notion.</p>';
+    return;
+  }
+
+  for (const db of state.discoveredDbs) {
+    const saved = state.savedSources[db.id] || {};
+    const isChecked = !!(saved.project_id);
+    const card = document.createElement("div");
+    card.className = "source-card";
+    card.id = "sc-" + db.id;
+
+    // Determine whether saved project_id came from the dropdown or was manual
+    const inDropdown = state.projects.some(p => p.id === saved.project_id);
+    const manualId   = (!inDropdown && saved.project_id) ? saved.project_id : "";
+    const dropdownId = inDropdown ? saved.project_id : "";
+
+    card.innerHTML = `
+      <div class="source-card-header" onclick="toggleCard('${db.id}')">
+        <input type="checkbox" id="chk-${db.id}" ${isChecked?"checked":""} onclick="event.stopPropagation();toggleCheck('${db.id}')">
+        <div class="source-card-title">${escHtml(db.title)}</div>
+        <span class="badge ${isChecked?"badge-green":"badge-gray"}" id="badge-${db.id}">
+          ${isChecked?"configured":"not configured"}
+        </span>
+      </div>
+      <div class="source-card-body ${isChecked?"open":""}" id="body-${db.id}">
+
+        <!-- Project selection -->
+        <div class="field-group">
+          <label>Maps to Project <span class="mapping-req">*</span></label>
+          <select id="proj-${db.id}" onchange="updateBadge('${db.id}')">
+            <option value="">— choose from Projects database —</option>
+            ${state.projects.map(p=>`<option value="${p.id}" ${dropdownId===p.id?"selected":""}>${escHtml(p.name)}</option>`).join("")}
+          </select>
+          <div class="proj-manual">
+            <label for="proj-manual-${db.id}">Or paste page ID:</label>
+            <input type="text" id="proj-manual-${db.id}"
+              placeholder="36b54686ae1581a2953cffc2c88f8bd2"
+              value="${escHtml(manualId)}"
+              oninput="updateBadge('${db.id}')"
+              style="font-family:monospace;font-size:12px;">
+          </div>
+          <div class="field-hint">
+            Manual ID takes priority over the dropdown. Copy from the Notion page URL
+            (last segment, remove hyphens if needed — both formats accepted).
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Column mapping -->
+        <div class="mapping-grid" id="mapping-${db.id}">
+          <div style="grid-column:1/-1;font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">
+            Column mapping — which column in <em>${escHtml(db.title)}</em> contains each field?
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn btn-ghost" onclick="loadSchema('${db.id}')">Load columns</button>
+          <span id="schema-status-${db.id}" style="font-size:12px;color:#888;"></span>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Advanced options -->
+        <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:10px;">Advanced options</div>
+
+        <div class="field-group">
+          <label>Work Type override map (JSON)</label>
+          <textarea id="wtmap-${db.id}" placeholder='{"Weekly Announcement": "🟢 Communication", "Grading": "🔵 Deep Work"}'>${escHtml(saved.work_type_map||"")}</textarea>
+          <div class="field-hint">Maps Category column values → Master Work Type. Leave blank if you mapped Work Type directly above.</div>
+        </div>
+
+        <div class="field-group">
+          <label>Back-link field name</label>
+          <input type="text" id="backlink-${db.id}"
+            value="${escHtml(saved.backlink_field !== undefined ? saved.backlink_field : "Master WBS")}"
+            placeholder="Master WBS">
+          <div class="field-hint">Name of the Relation column in this WBS that points back to Master WBS Tasks. Leave blank to skip.</div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="autops-${db.id}" ${saved.auto_calc_planned_start===false?"":"checked"}>
+          <label for="autops-${db.id}" style="font-weight:400;margin:0;">
+            Auto Planned Start (Due Date − 7 days when no Planned Start mapped)
+          </label>
+        </div>
+
+        <div class="field-group" style="margin-top:12px;">
+          <label>Hub Page URL or ID</label>
+          <input type="text" id="hubpage-${db.id}"
+            value="${escHtml(saved.hub_page_url||"")}"
+            placeholder="https://www.notion.so/... or page ID"
+            style="font-family:monospace;font-size:12px;">
+          <div class="field-hint">
+            Optional. When set, a "Project Page" link to this hub page is added to the
+            📁 Projects entry automatically when you save. Leave blank to skip.
+          </div>
+        </div>
+
+      </div>
+    `;
+    container.appendChild(card);
+
+    if (saved.field_map) {
+      renderMapping(db.id, null, saved.field_map);
+    }
+  }
+}
+
+function resolveProjectId(dbId) {
+  const manual = (document.getElementById("proj-manual-"+dbId)||{}).value || "";
+  if (manual.trim()) {
+    // Accept both hyphenated and raw IDs
+    return manual.trim().replace(/-/g,"")
+      .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,"$1-$2-$3-$4-$5");
+  }
+  return (document.getElementById("proj-"+dbId)||{}).value || "";
+}
+
+function toggleCard(dbId) {
+  const body = document.getElementById("body-"+dbId);
+  body.classList.toggle("open");
+}
+
+function toggleCheck(dbId) {
+  const chk = document.getElementById("chk-"+dbId);
+  const body = document.getElementById("body-"+dbId);
+  if (chk.checked) body.classList.add("open");
+  updateBadge(dbId);
+}
+
+function updateBadge(dbId) {
+  const chk   = document.getElementById("chk-"+dbId);
+  const badge  = document.getElementById("badge-"+dbId);
+  const projId = resolveProjectId(dbId);
+  const ok = chk && chk.checked && !!projId;
+  badge.className = "badge " + (ok ? "badge-green" : "badge-gray");
+  badge.textContent = ok ? "configured" : "not configured";
+}
+
+async function loadSchema(dbId) {
+  const statusEl = document.getElementById("schema-status-"+dbId);
+  statusEl.textContent = "Loading…";
+  const res = await api("POST","/api/schema",{token:state.token, db_id:dbId});
+  if (res.error) { statusEl.textContent = "Error: "+res.error; return; }
+  statusEl.textContent = `${res.columns.length} columns found`;
+
+  const saved = state.savedSources[dbId] || {};
+  renderMapping(dbId, res.columns, saved.field_map || {});
+}
+
+const MASTER_FIELDS = [
+  {key:"task_name",     label:"Task Name",                req:true},
+  {key:"priority",      label:"Priority",                 req:false},
+  {key:"planned_start", label:"Planned Start",            req:false},
+  {key:"planned_end",   label:"Planned End / Due Date",   req:false},
+  {key:"notes",         label:"Notes",                    req:false},
+  {key:"work_type",     label:"Work Type",                req:false},
+  {key:"category",      label:"Category / Phase / Group", req:false},
+  {key:"level",         label:"Service Level",            req:false},
+  {key:"org_division",  label:"Organization / Division",  req:false},
+];
+
+function renderMapping(dbId, columns, savedMap) {
+  const container = document.getElementById("mapping-"+dbId);
+  const header = container.querySelector("div");
+  container.innerHTML = "";
+  container.appendChild(header);
+
+  for (const field of MASTER_FIELDS) {
+    const lbl = document.createElement("div");
+    lbl.className = "mapping-label";
+    lbl.innerHTML = field.label + (field.req ? ' <span class="mapping-req">*</span>' : '');
+
+    const sel = document.createElement("select");
+    sel.id = `map-${dbId}-${field.key}`;
+    sel.innerHTML = `<option value="">— skip —</option>`;
+
+    if (columns) {
+      for (const col of columns) {
+        const selected = savedMap[field.key] === col.name;
+        sel.innerHTML += `<option value="${escHtml(col.name)}" ${selected?"selected":""}>${escHtml(col.name)} <span style="color:#aaa">(${col.type})</span></option>`;
+      }
+      if (!savedMap[field.key]) {
+        const keywords = {
+          task_name:     ["task","name","title","item"],
+          status:        ["status","state"],
+          priority:      ["priority","prio"],
+          planned_start: ["planned start","start date","start"],
+          planned_end:   ["planned end","due date","due","end date","end","deadline"],
+          notes:         ["notes","note","description","desc","comment"],
+          work_type:     ["work type","type","kind"],
+          category:      ["category","cat"],
+        };
+        const kws = keywords[field.key] || [];
+        for (const col of columns) {
+          const name = col.name.toLowerCase();
+          if (kws.some(k => name.includes(k))) {
+            sel.value = col.name;
+            break;
+          }
+        }
+      }
+    } else if (savedMap[field.key]) {
+      sel.innerHTML += `<option value="${escHtml(savedMap[field.key])}" selected>${escHtml(savedMap[field.key])}</option>`;
+    }
+
+    container.appendChild(lbl);
+    container.appendChild(sel);
+  }
+}
+
+async function saveSourceConfig() {
+  const sources = {};
+  for (const db of state.discoveredDbs) {
+    const chk = document.getElementById("chk-"+db.id);
+    if (!chk || !chk.checked) continue;
+
+    const projId = resolveProjectId(db.id);
+    if (!projId) {
+      alert(`Please select or paste a project ID for "${db.title}".`);
+      return;
+    }
+
+    const field_map = {};
+    for (const field of MASTER_FIELDS) {
+      const sel = document.getElementById(`map-${db.id}-${field.key}`);
+      if (sel && sel.value) field_map[field.key] = sel.value;
+    }
+    if (!field_map.task_name) {
+      alert(`Please map the Task Name column for "${db.title}".`);
+      return;
+    }
+
+    const wtRaw   = (document.getElementById("wtmap-"+db.id)||{}).value || "";
+    const blField = (document.getElementById("backlink-"+db.id)||{}).value || "Master WBS";
+    const autops  = (document.getElementById("autops-"+db.id)||{}).checked !== false;
+    const hubUrl  = ((document.getElementById("hubpage-"+db.id)||{}).value || "").trim();
+
+    sources[db.id] = {
+      project_id: projId,
+      field_map,
+      db_title: db.title,
+      work_type_map: wtRaw,
+      backlink_field: blField,
+      auto_calc_planned_start: autops,
+      hub_page_url: hubUrl,
+    };
+  }
+
+  // For any source that now has a hub_page_url that wasn't set before, wire up the link
+  const prevSources = state.savedSources || {};
+  for (const [dbId, src] of Object.entries(sources)) {
+    const prev = prevSources[dbId] || {};
+    if (src.hub_page_url && src.hub_page_url !== prev.hub_page_url && src.project_id) {
+      const linkRes = await api("POST", "/api/add-project-page-link", {
+        token: state.token,
+        project_entry_id: src.project_id,
+        hub_page_url: src.hub_page_url,
+      });
+      if (linkRes.error) {
+        setStatus("save-status", `⚠️ Saved, but project link failed: ${linkRes.error}`, "orange");
+      }
+    }
+  }
+
+  state.savedSources = sources;
+  const cfg = await api("GET","/api/config");
+  cfg.sources = sources;
+  await api("POST","/api/config",cfg);
+  setStatus("save-status","✓ Saved","green");
+  setTimeout(()=>setStatus("save-status",""),2500);
+  refreshSyncTab();
+  refreshQuickTab();
+}
+
+// ── Sync tab ──────────────────────────────────────────────────────────────────
+function refreshSyncTab() {
+  const container = document.getElementById("sync-source-list");
+  const entries = Object.entries(state.savedSources);
+  if (!entries.length) {
+    container.innerHTML = '<p style="color:#888;font-size:13px;">No sources configured yet. Go to the Sources tab to set them up.</p>';
+    return;
+  }
+  container.innerHTML = entries.map(([dbId, src]) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-weight:400;">
+      <input type="checkbox" id="sync-chk-${dbId}" checked style="width:16px;height:16px;">
+      <span>${escHtml(src.db_title || dbId)}</span>
+      <span class="badge badge-blue" style="margin-left:auto;">${escHtml(getProjectLabel(src.project_id))}</span>
+    </label>
+  `).join("");
+}
+
+function getProjectLabel(projectId) {
+  if (!projectId) return "—";
+  const p = state.projects.find(p => p.id === projectId);
+  return p ? p.name : projectId.replace(/-/g,"").slice(0,8) + "…";
+}
+
+function buildSourcesList() {
+  const sources = [];
+  for (const [dbId, src] of Object.entries(state.savedSources)) {
+    const chk = document.getElementById("sync-chk-"+dbId);
+    if (chk && chk.checked) {
+      sources.push({
+        db_id: dbId,
+        project_id: src.project_id,
+        field_map: src.field_map,
+        db_title: src.db_title || dbId,
+        work_type_map: src.work_type_map || "",
+        backlink_field: src.backlink_field || "Master WBS",
+        auto_calc_planned_start: src.auto_calc_planned_start !== false,
+      });
+    }
+  }
+  return sources;
+}
+
+// ── Sync progress helpers ─────────────────────────────────────────────────────
+let _syncState = {};
+
+function _syncLog(text, color) {
+  const log = document.getElementById("sync-log");
+  const line = document.createElement("div");
+  line.style.cssText = `padding:1px 0;border-bottom:1px solid #2d3748;color:${color||"#e2e8f0"};`;
+  line.textContent   = text;
+  log.appendChild(line);
+  while (log.children.length > 300) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+function _syncHandleEvent(evt) {
+  const phaseEl   = document.getElementById("sync-phase-label");
+  const counterEl = document.getElementById("sync-task-counter");
+  const curEl     = document.getElementById("sync-current-task");
+  const bar       = document.getElementById("sync-progress-bar");
+  const pct = (n, t) => t > 0 ? Math.round(n / t * 100) : 0;
+
+  switch (evt.type) {
+    case "start":
+      _syncState = {totalDbs: evt.total_dbs, taskTotal: 0, taskDone: 0};
+      phaseEl.textContent = `Phase 1 of 2 — Master WBS Tasks`;
+      _syncLog(`▶ Syncing ${evt.total_dbs} database(s)…`, "#90cdf4");
+      break;
+
+    case "db_start":
+      _syncState.taskTotal = 0; _syncState.taskDone = 0;
+      phaseEl.textContent  = `Phase 1 of 2 — ${evt.db}  (${evt.db_n}/${evt.total_dbs})`;
+      counterEl.textContent = "Loading tasks…";
+      bar.style.width = "0%";
+      curEl.textContent = "";
+      _syncLog(`📂 ${evt.db}`, "#fbd38d");
+      break;
+
+    case "db_loaded":
+      _syncState.taskTotal  = evt.task_count;
+      counterEl.textContent = `0 / ${evt.task_count}`;
+      break;
+
+    case "task":
+      _syncState.taskDone++;
+      bar.style.width       = pct(_syncState.taskDone, _syncState.taskTotal) + "%";
+      counterEl.textContent = `${_syncState.taskDone} / ${_syncState.taskTotal || "?"}`;
+      curEl.textContent     = evt.task;
+      if (evt.action === "created") _syncLog(`  ✅ ${evt.task}`, "#68d391");
+      else if (evt.action === "error") _syncLog(`  ❌ ${evt.task}: ${evt.detail||""}`, "#fc8181");
+      else if (evt.action === "deleted") _syncLog(`  🗑 ${evt.task}`, "#f6ad55");
+      break;
+
+    case "db_done": {
+      bar.style.width = "100%";
+      const parts = [`✓ ${evt.created} created, ${evt.updated} updated`];
+      if (evt.skipped) parts.push(`${evt.skipped} skipped`);
+      if (evt.deleted) parts.push(`${evt.deleted} deleted`);
+      if (evt.errors)  parts.push(`${evt.errors} error(s)`);
+      _syncLog(parts.join(" · "), "#9ae6b4");
+      break;
+    }
+    case "phase2_start":
+      phaseEl.textContent   = `Phase 2 of 2 — Work Sessions`;
+      bar.style.width       = "0%";
+      counterEl.textContent = `0 / ${evt.project_count} project(s)`;
+      curEl.textContent     = "";
+      _syncLog(`⏱️ Syncing Work Sessions (${evt.project_count} project(s))`, "#90cdf4");
+      break;
+
+    case "ws_done":
+      bar.style.width       = pct(evt.n, evt.total) + "%";
+      counterEl.textContent = `${evt.n} / ${evt.total} project(s)`;
+      curEl.textContent     = evt.project || "";
+      _syncLog(
+        `  ⏱️ ${evt.project}: ${evt.created} created, ${evt.skipped} existed` +
+        (evt.error ? ` ❌ ${evt.error}` : ""),
+        evt.error ? "#fc8181" : "#e2e8f0"
+      );
+      break;
+
+    case "finished":
+      bar.style.width       = "100%";
+      counterEl.textContent = "";
+      curEl.textContent     = "";
+      phaseEl.textContent   = "✓ Sync complete";
+      _syncLog("✅ Done", "#68d391");
+      break;
+
+    case "error":
+      phaseEl.textContent = "⚠ Error";
+      _syncLog(`❌ ${evt.message}`, "#fc8181");
+      break;
+  }
+}
+
+async function runSync() {
+  if (!state.token) { alert("Set your token in the Setup tab first."); return; }
+  const sources = buildSourcesList();
+  if (!sources.length) { alert("Select at least one source database to sync."); return; }
+
+  const btn = document.getElementById("sync-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Syncing…';
+  document.getElementById("result-box").classList.remove("show");
+
+  // Reset and show progress panel
+  const prog = document.getElementById("sync-progress");
+  prog.style.display = "block";
+  document.getElementById("sync-log").innerHTML = "";
+  document.getElementById("sync-progress-bar").style.width = "0%";
+  document.getElementById("sync-phase-label").textContent = "Starting…";
+  document.getElementById("sync-task-counter").textContent = "";
+  document.getElementById("sync-current-task").textContent = "";
+
+  // Start job
+  let jobId;
+  try {
+    const startRes = await api("POST", "/api/sync-start", {token: state.token, sources});
+    if (startRes.error) {
+      document.getElementById("sync-phase-label").textContent = "✗ " + startRes.error;
+      btn.disabled = false; btn.innerHTML = "▶ Sync Now";
+      return;
+    }
+    jobId = startRes.job_id;
+  } catch(e) {
+    document.getElementById("sync-phase-label").textContent = "✗ Could not start sync";
+    btn.disabled = false; btn.innerHTML = "▶ Sync Now";
+    return;
+  }
+
+  // Poll for progress
+  let offset = 0;
+  let finalResult = null;
+  while (true) {
+    await new Promise(r => setTimeout(r, 500));
+    let status;
+    try {
+      const r = await fetch(`/api/sync-status/${jobId}?offset=${offset}`);
+      status = await r.json();
+    } catch(e) {
+      _syncLog(`❌ Poll error: ${e.message}`, "#fc8181");
+      break;
+    }
+    for (const evt of (status.events || [])) _syncHandleEvent(evt);
+    offset += (status.events || []).length;
+    if (status.done) { finalResult = status.result; break; }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = "▶ Sync Now";
+
+  if (!finalResult) return;
+  const res = finalResult;
+
+  btn.disabled = false;
+  btn.innerHTML = "▶ Sync Now";
+
+  document.getElementById("r-created").textContent      = res.created    ?? "—";
+  document.getElementById("r-updated").textContent      = res.updated    ?? "—";
+  document.getElementById("r-skipped").textContent      = res.skipped    ?? "—";
+  document.getElementById("r-deleted").textContent      = res.deleted    ?? "—";
+  document.getElementById("r-ws-created").textContent   = res.ws_created ?? "—";
+  document.getElementById("r-ws-skipped").textContent   = res.ws_skipped ?? "—";
+  document.getElementById("r-errors-count").textContent = res.errors?.length ?? "—";
+
+  const errList = document.getElementById("r-errors-list");
+  if (res.errors && res.errors.length) {
+    errList.style.display = "block";
+    errList.innerHTML =
+      `<strong>⛔ Errors (${res.errors.length}):</strong><ul>` +
+      res.errors.map(e => `<li>${escHtml(e)}</li>`).join("") +
+      "</ul>";
+  } else {
+    errList.style.display = "none";
+  }
+
+  const skipList = document.getElementById("r-skipped-list");
+  if (res.skipped_tasks && res.skipped_tasks.length) {
+    skipList.style.display = "block";
+    skipList.innerHTML =
+      `<strong>⚠️ Skipped (${res.skipped_tasks.length}) — these records were not synced:</strong><ul>` +
+      res.skipped_tasks.map(t => {
+        const src   = t.source ? `[${escHtml(t.source)}] ` : "";
+        const label = t.url
+          ? `<a href="${escHtml(t.url)}" target="_blank">Open in Notion ↗</a>`
+          : escHtml(t.page_id);
+        return `<li>${src}${label} — ${escHtml(t.reason)}</li>`;
+      }).join("") +
+      "</ul>";
+  } else {
+    skipList.style.display = "none";
+  }
+
+  const logNotice = document.getElementById("r-log-notice");
+  if (res.log_file) {
+    document.getElementById("r-log-file").textContent = res.log_file;
+    logNotice.style.display = "block";
+    logNotice.title = res.log_dir || "";
+  } else {
+    logNotice.style.display = "none";
+  }
+
+  document.getElementById("result-box").classList.add("show");
+}
+
+
+// ── Deduplication ────────────────────────────────────────────────────────────
+async function runDedup() {
+  if (!state.token) { alert("Set your token in the Setup tab first."); return; }
+  const btn = document.getElementById("dedup-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> Scanning…';
+  setStatus("dedup-status", "");
+
+  const res = await api("POST", "/api/deduplicate", {token: state.token});
+
+  btn.disabled = false;
+  btn.innerHTML = "🧹 Remove Duplicates";
+
+  if (res.error) {
+    setStatus("dedup-status", "✗ " + res.error, "red");
+    return;
+  }
+
+  const totalArchived = (res.master_dupes_archived || 0) + (res.ws_archived || 0);
+  let msg;
+  if (totalArchived === 0) {
+    msg = `✓ No duplicates found — ${res.kept} session(s) all clean`;
+  } else {
+    const parts = [];
+    if (res.master_dupes_archived > 0)
+      parts.push(`${res.master_dupes_archived} duplicate task(s) in Master WBS`);
+    if (res.ws_archived > 0)
+      parts.push(`${res.ws_archived} duplicate Work Session(s)`);
+    msg = `✓ Archived: ${parts.join(" · ")} · ${res.kept} session(s) kept`;
+  }
+
+  if (res.no_task_sessions > 0) {
+    msg += ` · ⚠️ ${res.no_task_sessions} unlinked session(s) skipped`;
+  }
+  if (res.errors && res.errors.length) {
+    msg += ` · ❌ ${res.errors.length} error(s): ${res.errors.slice(0,3).join("; ")}`;
+    setStatus("dedup-status", msg, "red");
+  } else {
+    setStatus("dedup-status", msg, totalArchived > 0 ? "green" : res.no_task_sessions > 0 ? "orange" : "green");
+  }
+}
+
+async function runWriteback() {
+  if (!state.token) { alert("Set your token in the Setup tab first."); return; }
+  const btn = document.getElementById("writeback-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> Writing back…';
+  setStatus("writeback-status", "");
+
+  const res = await api("POST", "/api/writeback-dates", {token: state.token});
+
+  btn.disabled = false;
+  btn.innerHTML = "↩ Write-back Dates";
+
+  if (res.error) {
+    setStatus("writeback-status", "✗ " + res.error, "red");
+    return;
+  }
+  let msg = `✓ ${res.updated} task(s) updated`;
+  if (res.skipped) msg += ` · ${res.skipped} skipped (no mapping or field)`;
+  if (res.errors && res.errors.length)
+    msg += ` · ❌ ${res.errors.length} error(s): ${res.errors.slice(0,2).join("; ")}`;
+  setStatus("writeback-status", msg, res.errors?.length ? "orange" : "green");
+}
+
+// ── Quick Start tab ───────────────────────────────────────────────────────────
+function refreshQuickTab() {
+  const sel = document.getElementById("qs-source");
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— select a project —</option>';
+  for (const [dbId, src] of Object.entries(state.savedSources)) {
+    const label = src.db_title || dbId;
+    const opt   = document.createElement("option");
+    opt.value       = dbId;
+    opt.textContent = label;
+    if (dbId === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  // Reset category panel whenever sources change
+  document.getElementById("qs-category-group").style.display = "none";
+}
+
+// Called when the WBS dropdown changes — load category options for that database
+async function onQsSourceChange() {
+  const dbId = document.getElementById("qs-source").value;
+  const catGroup = document.getElementById("qs-category-group");
+  const catSel   = document.getElementById("qs-category");
+  const catNew   = document.getElementById("qs-category-new");
+
+  catNew.style.display = "none";
+  catNew.value = "";
+
+  if (!dbId || !state.token) {
+    catGroup.style.display = "none";
+    return;
+  }
+
+  const src = state.savedSources[dbId];
+  const categoryField = src?.field_map?.category || "";
+  if (!categoryField) {
+    catGroup.style.display = "none";
+    return;
+  }
+
+  // Show the panel immediately with a loading state
+  catGroup.style.display = "block";
+  catSel.innerHTML = '<option value="">Loading categories…</option>';
+  catSel.disabled = true;
+
+  const res = await api("POST", "/api/wbs-categories", {
+    token: state.token,
+    db_id: dbId,
+    category_field: categoryField,
+  });
+
+  catSel.disabled = false;
+  if (res.error || !res.options) {
+    catSel.innerHTML = '<option value="">— could not load —</option>';
+    return;
+  }
+
+  catSel.innerHTML = '<option value="">— no category —</option>';
+  for (const opt of res.options) {
+    const el = document.createElement("option");
+    el.value       = opt.name;
+    el.textContent = opt.name;
+    catSel.appendChild(el);
+  }
+  // Always add the "new category" option at the end
+  const newOpt = document.createElement("option");
+  newOpt.value       = "__new__";
+  newOpt.textContent = "➕ Add new category…";
+  catSel.appendChild(newOpt);
+}
+
+// Show/hide the free-text input when "Add new category" is chosen
+function onQsCategoryChange() {
+  const val    = document.getElementById("qs-category").value;
+  const catNew = document.getElementById("qs-category-new");
+  if (val === "__new__") {
+    catNew.style.display = "block";
+    catNew.focus();
+  } else {
+    catNew.style.display = "none";
+    catNew.value = "";
+  }
+}
+
+function setQsNow() {
+  const now = new Date();
+  // datetime-local format: YYYY-MM-DDTHH:MM
+  const pad = n => String(n).padStart(2,"0");
+  const val = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}` +
+              `T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  document.getElementById("qs-start").value = val;
+}
+
+async function runQuickAdd() {
+  const taskName  = (document.getElementById("qs-task-name").value || "").trim();
+  const dbId      = document.getElementById("qs-source").value;
+  const startVal  = document.getElementById("qs-start").value;
+  const dueDate   = document.getElementById("qs-due-date").value || "";
+  const priority  = document.getElementById("qs-priority").value || "Normal";
+  const workType  = document.getElementById("qs-work-type").value || "";
+
+  // Resolve category: use free-text input if "Add new" was chosen
+  const catSel  = document.getElementById("qs-category");
+  const catNew  = document.getElementById("qs-category-new");
+  let   category = "";
+  if (catSel && catSel.value === "__new__") {
+    category = (catNew.value || "").trim();
+    if (!category) { alert("Please enter a name for the new category."); return; }
+  } else if (catSel) {
+    category = catSel.value || "";
+  }
+
+  if (!taskName) { alert("Please enter a task name."); return; }
+  if (!dbId)     { alert("Please select a project."); return; }
+
+  const src = state.savedSources[dbId];
+  if (!src) { alert("Source not found — go to Sources tab and save configuration."); return; }
+
+  const btn = document.getElementById("qs-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+
+  document.getElementById("qs-result").style.display = "none";
+  document.getElementById("qs-result-ok").style.display  = "none";
+  document.getElementById("qs-result-err").style.display = "none";
+
+  // Convert datetime-local value to ISO-8601 with local timezone offset.
+  // IMPORTANT: use local time components (getHours etc.), NOT toISOString()
+  // which returns UTC — that caused times to appear shifted by the UTC offset.
+  let sessionStart = "";
+  if (startVal) {
+    const d    = new Date(startVal);
+    const pad  = n => String(n).padStart(2, "0");
+    const off  = -d.getTimezoneOffset();          // minutes ahead of UTC
+    const sign = off >= 0 ? "+" : "-";
+    const hh   = pad(Math.floor(Math.abs(off) / 60));
+    const mm   = pad(Math.abs(off) % 60);
+    const local = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` +
+                  `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    sessionStart = local + `${sign}${hh}:${mm}`;
+  }
+
+  const res = await api("POST", "/api/quick-add", {
+    token:           state.token,
+    source_db_id:    dbId,
+    project_id:      src.project_id,
+    task_name:       taskName,
+    task_name_field: src.field_map?.task_name || "Task",
+    backlink_field:  src.backlink_field || "Master WBS",
+    session_start:   sessionStart,
+    due_date:        dueDate,
+    priority:        priority,
+    work_type:       workType,
+    planned_end_field: src.field_map?.planned_end || "",
+    priority_field:    src.field_map?.priority    || "",
+    work_type_field:   src.field_map?.work_type   || "",
+    category:          category,
+    category_field:    src.field_map?.category    || "",
+  });
+
+  btn.disabled = false;
+  btn.innerHTML = "⚡ Add Task &amp; Start Session";
+  document.getElementById("qs-result").style.display = "block";
+
+  if (res.error) {
+    document.getElementById("qs-result-err").style.display  = "block";
+    document.getElementById("qs-result-err").textContent    = "✗ " + res.error;
+  } else {
+    document.getElementById("qs-result-ok").style.display   = "block";
+    document.getElementById("qs-link-wbs").href    = res.wbs_url    || "#";
+    document.getElementById("qs-link-master").href = res.master_url || "#";
+    document.getElementById("qs-link-ws").href     = res.ws_url     || "#";
+    document.getElementById("qs-task-name").value  = "";  // clear for next entry
+    // Reset category to "no category" (keep dropdown open for next quick entry)
+    if (document.getElementById("qs-category").value === "__new__") {
+      document.getElementById("qs-category").value = "";
+      document.getElementById("qs-category-new").style.display = "none";
+      document.getElementById("qs-category-new").value = "";
+    }
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t,i)=> {
+    const names = ["setup","sources","sync","quick","help"];
+    t.classList.toggle("active", names[i]===name);
+  });
+  document.querySelectorAll(".pane").forEach(p => {
+    p.classList.toggle("active", p.id === "pane-"+name);
+  });
+  if (name === "sync")  refreshSyncTab();
+  if (name === "quick") refreshQuickTab();
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str||"")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+init();
+</script>
+</body>
+</html>

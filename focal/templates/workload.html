@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Workload Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #f5f5f4; color: #1c1917; min-height: 100vh; }
+
+  header { background: #fff; border-bottom: 1px solid #e7e5e4; padding: 14px 24px;
+           display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+
+  .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer;
+         font-size: 13px; font-weight: 500; transition: background .15s; }
+  .btn-primary   { background: #2563eb; color: #fff; }
+  .btn-primary:hover   { background: #1d4ed8; }
+  .btn-secondary { background: #e7e5e4; color: #1c1917; }
+  .btn-secondary:hover { background: #d6d3d1; }
+  .btn-range { padding: 5px 12px; border-radius: 6px; border: 1px solid #e7e5e4;
+               background: #fff; cursor: pointer; font-size: 13px; color: #57534e;
+               transition: all .15s; }
+  .btn-range.active, .btn-range:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .toolbar .label { font-size: 13px; color: #78716c; font-weight: 500; }
+  .custom-dates { display: none; align-items: center; gap: 6px; }
+  .custom-dates input { padding: 5px 8px; border: 1px solid #e7e5e4; border-radius: 6px;
+                        font-size: 13px; color: #1c1917; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+               padding: 16px 20px; }
+  .stat-card .val { font-size: 28px; font-weight: 700; color: #1c1917; line-height: 1; }
+  .stat-card .lbl { font-size: 12px; color: #78716c; margin-top: 4px; }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .chart-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px; padding: 16px 20px; }
+  .chart-card h3 { font-size: 13px; font-weight: 600; color: #57534e;
+                   text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bar-label { font-size: 12px; color: #1c1917; width: 140px; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .bar-track { flex: 1; background: #f5f5f4; border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px; background: #2563eb; transition: width .4s; }
+  .bar-fill-wt { background: #7c3aed; }
+  .bar-hrs   { font-size: 12px; color: #78716c; width: 42px; text-align: right; flex-shrink: 0; }
+  .empty-chart { font-size: 13px; color: #a8a29e; padding: 8px 0; }
+
+  .section-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+                  padding: 16px 20px; margin-bottom: 16px; }
+  .section-card h3 { font-size: 13px; font-weight: 600; color: #57534e;
+                     text-transform: uppercase; letter-spacing: .04em; margin-bottom: 14px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 0 10px 8px 0; color: #78716c; font-weight: 500;
+       font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+       border-bottom: 1px solid #e7e5e4; }
+  td { padding: 9px 10px 9px 0; border-bottom: 1px solid #f5f5f4; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .dur { font-weight: 600; color: #1c1917; }
+  .wt-badge { display: inline-block; padding: 2px 6px; border-radius: 4px;
+              font-size: 11px; font-weight: 500; }
+  .status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px;
+                  font-size: 11px; font-weight: 500; }
+  .status-completed { background: #dcfce7; color: #166534; }
+  .status-inprog    { background: #fef9c3; color: #854d0e; }
+  .status-other     { background: #f5f5f4; color: #57534e; }
+  .sess-name a { color: #1c1917; text-decoration: none; font-weight: 500; }
+  .sess-name a:hover { text-decoration: underline; }
+  .sess-proj { font-size: 11px; color: #78716c; margin-top: 2px; }
+
+  .p-urgent { background: #fee2e2; color: #dc2626; }
+  .p-high   { background: #ffedd5; color: #c2410c; }
+  .p-normal { background: #f5f5f4; color: #57534e; }
+  .p-low    { background: #f5f5f4; color: #a8a29e; }
+
+  .loading-inline { font-size: 13px; color: #78716c; padding: 12px 0; }
+  .error-box { color: #dc2626; font-size: 13px; padding: 12px 0; }
+  .all-clear  { text-align: center; padding: 40px 0; font-size: 24px; }
+  .all-clear p { font-size: 14px; color: #78716c; margin-top: 6px; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px;
+             border: 2px solid #e7e5e4; border-top-color: #2563eb;
+             border-radius: 50%; animation: spin .7s linear infinite;
+             vertical-align: middle; margin-right: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    .charts-row { grid-template-columns: 1fr; }
+    .stats-row  { grid-template-columns: repeat(3, 1fr); }
+    .bar-label  { width: 100px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Workload Dashboard</h1>
+  <a href="/focus"    class="btn btn-secondary" style="text-decoration:none;">📌 Focus</a>
+  <a href="/"         class="btn btn-secondary" style="text-decoration:none;">← Focal</a>
+</header>
+
+<main>
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <span class="label">Range:</span>
+    <button class="btn-range" onclick="setMode('today')">Today</button>
+    <button class="btn-range active" id="btn-this_week" onclick="setMode('this_week')">This Week</button>
+    <button class="btn-range" onclick="setMode('last_week')">Last Week</button>
+    <button class="btn-range" onclick="setMode('this_month')">This Month</button>
+    <button class="btn-range" onclick="setMode('custom')">Custom…</button>
+    <div class="custom-dates" id="custom-dates">
+      <input type="date" id="start-date">
+      <span style="color:#78716c">to</span>
+      <input type="date" id="end-date">
+      <button class="btn btn-primary" onclick="load()">Go</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card"><div class="val" id="stat-hours">—</div><div class="lbl">Total Hours</div></div>
+    <div class="stat-card"><div class="val" id="stat-sessions">—</div><div class="lbl">Sessions</div></div>
+    <div class="stat-card"><div class="val" id="stat-projects">—</div><div class="lbl">Projects</div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>By Project</h3>
+      <div id="chart-project"><div class="loading-inline"><span class="spinner"></span> Loading…</div></div>
+    </div>
+    <div class="chart-card">
+      <h3>By Work Type</h3>
+      <div id="chart-worktype"><div class="loading-inline"><span class="spinner"></span> Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Sessions table -->
+  <div class="section-card">
+    <h3>Sessions</h3>
+    <div id="sessions-body"><div class="loading-inline"><span class="spinner"></span> Loading…</div></div>
+  </div>
+
+</main>
+
+<script>
+let currentMode = "this_week";
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll(".btn-range").forEach(b => b.classList.remove("active"));
+  const ids = {today:"btn-today", this_week:"btn-this_week",
+               last_week:"btn-last_week", this_month:"btn-this_month"};
+  if (ids[mode]) document.getElementById(ids[mode])?.classList.add("active");
+  document.getElementById("custom-dates").style.display = mode === "custom" ? "flex" : "none";
+  if (mode !== "custom") load();
+}
+
+function buildPayload() {
+  const p = {mode: currentMode};
+  if (currentMode === "custom") {
+    p.start_date = document.getElementById("start-date").value;
+    p.end_date   = document.getElementById("end-date").value;
+    if (!p.start_date || !p.end_date) return null;
+  }
+  return p;
+}
+
+function fmtHours(h) {
+  if (h == null) return "—";
+  const hrs = Math.floor(h), mins = Math.round((h - hrs) * 60);
+  return hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`) : `${mins}m`;
+}
+
+function fmtDT(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("en-US", {month:"short", day:"numeric",
+      hour:"numeric", minute:"2-digit", hour12:true});
+  } catch { return iso; }
+}
+
+function fmtDateOnly(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
+    return d.toLocaleDateString("en-US", {month:"short", day:"numeric"});
+  } catch { return iso; }
+}
+
+function renderBars(items, maxHours, fillClass) {
+  if (!items || items.length === 0) return '<div class="empty-chart">No data for this period.</div>';
+  return items.map(item => `
+    <div class="bar-row">
+      <div class="bar-label" title="${item.name}">${item.name}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${fillClass}" style="width:${maxHours ? (item.hours/maxHours*100).toFixed(1) : 0}%"></div>
+      </div>
+      <div class="bar-hrs">${fmtHours(item.hours)}</div>
+    </div>`).join("");
+}
+
+function statusClass(s) {
+  if (s === "Completed")  return "status-completed";
+  if (s === "In Progress") return "status-inprog";
+  return "status-other";
+}
+
+function renderSessions(sessions) {
+  if (!sessions || sessions.length === 0)
+    return '<div class="all-clear">📭<p>No sessions logged for this period.</p></div>';
+  const rows = sessions.map(s => `
+    <tr>
+      <td class="sess-name">
+        <a href="${s.url.replace("https://","notion://")}" >${s.name}</a>
+        <div class="sess-proj">${s.project}</div>
+      </td>
+      <td>${fmtDT(s.start)}</td>
+      <td>${s.end ? fmtDT(s.end) : '<span style="color:#a8a29e">in progress</span>'}</td>
+      <td class="dur">${fmtHours(s.duration)}</td>
+      <td>${s.work_type}</td>
+      <td><span class="status-badge ${statusClass(s.status)}">${s.status}</span></td>
+    </tr>`).join("");
+  return `<table>
+    <thead><tr>
+      <th>Session</th><th>Start</th><th>End</th>
+      <th>Duration</th><th>Work Type</th><th>Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function load() {
+  const payload = buildPayload();
+  if (!payload) return;
+
+  document.getElementById("chart-project").innerHTML   = '<div class="loading-inline"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("chart-worktype").innerHTML  = '<div class="loading-inline"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("sessions-body").innerHTML   = '<div class="loading-inline"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("stat-hours").textContent    = "—";
+  document.getElementById("stat-sessions").textContent = "—";
+  document.getElementById("stat-projects").textContent = "—";
+
+  try {
+    const res  = await fetch("/api/workload", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error) { showErr(data.error); return; }
+
+    // Stats
+    document.getElementById("stat-hours").textContent    = fmtHours(data.total_hours);
+    document.getElementById("stat-sessions").textContent = data.session_count;
+    document.getElementById("stat-projects").textContent = data.project_count;
+
+    // Charts
+    const maxP  = data.by_project[0]?.hours  || 1;
+    const maxWT = data.by_work_type[0]?.hours || 1;
+    document.getElementById("chart-project").innerHTML  = renderBars(data.by_project,   maxP,  "");
+    document.getElementById("chart-worktype").innerHTML = renderBars(data.by_work_type, maxWT, "bar-fill-wt");
+
+    // Sessions
+    document.getElementById("sessions-body").innerHTML = renderSessions(data.sessions);
+  } catch(e) {
+    showErr(e.message);
+  }
+}
+
+function showErr(msg) {
+  const html = `<div class="error-box">⚠️ ${msg}</div>`;
+  document.getElementById("chart-project").innerHTML  = html;
+  document.getElementById("chart-worktype").innerHTML = html;
+  document.getElementById("sessions-body").innerHTML  = html;
+}
+
+// Add missing id attrs to range buttons on load
+document.addEventListener("DOMContentLoaded", () => {
+  const labels = ["today","this_week","last_week","this_month"];
+  document.querySelectorAll(".btn-range").forEach((b, i) => {
+    if (labels[i]) b.id = "btn-" + labels[i];
+  });
+  load();
+});
+</script>
+</body>
+</html>

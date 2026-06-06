@@ -278,6 +278,76 @@ def cleanup_orphaned_mappings(token, all_current_src_ids, mappings, sessions_map
     return cleaned
 
 
+# ── Focus Task Cache ──────────────────────────────────────────────────────────
+def regenerate_focus_cache(token):
+    """Regenerate focus-task-list-cache.json from Master WBS Tasks.
+    Includes only tasks with Planned End set. Called after sync and quick-add
+    so the cache stays fresh. Failures are silent — never crashes the caller."""
+    import json, os, datetime
+    cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "focus-task-list-cache.json")
+    try:
+        # 1. Query only tasks that have a Planned End date
+        filter_body = {"property": "Planned End", "date": {"is_not_empty": True}}
+        pages = query_db(token, MASTER_DB_ID, filter_body)
+
+        # 2. Collect unique project page IDs for batch name lookup
+        project_ids = set()
+        for page in pages:
+            for rel in page["properties"].get("Project", {}).get("relation", []):
+                project_ids.add(rel["id"])
+
+        # 3. Fetch project names
+        project_names = {}
+        for pid in project_ids:
+            try:
+                r = requests.get(f"{NOTION_API}/pages/{pid}",
+                                 headers=headers(token), timeout=10)
+                if r.ok:
+                    props = r.json().get("properties", {})
+                    project_names[pid] = extract(props.get("Project Name", {})) or ""
+            except Exception:
+                pass
+
+        # 4. Build task entries
+        tasks = []
+        for page in pages:
+            props = page.get("properties", {})
+            date_raw = extract(props.get("Planned End", {}))
+            planned_end = date_raw["start"] if isinstance(date_raw, dict) else None
+            if not planned_end:
+                continue
+            rel_list = props.get("Project", {}).get("relation", [])
+            proj_id  = rel_list[0]["id"] if rel_list else ""
+            ws_urls  = [
+                f"https://app.notion.com/p/{r['id'].replace('-','')}"
+                for r in props.get("Work Sessions", {}).get("relation", [])
+            ]
+            pid_clean = page["id"].replace("-", "")
+            tasks.append({
+                "id":           page["id"],
+                "url":          f"https://app.notion.com/p/{pid_clean}",
+                "name":         extract(props.get("Task Name", {})) or "",
+                "planned_end":  planned_end,
+                "priority":     extract(props.get("Priority", {})) or "Normal",
+                "work_type":    extract(props.get("Work Type", {})) or "",
+                "project_name": project_names.get(proj_id, ""),
+                "notes":        extract(props.get("Notes", {})) or "",
+                "work_sessions": ws_urls,
+            })
+
+        tasks.sort(key=lambda t: t["planned_end"])
+        cache = {
+            "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "task_count":   len(tasks),
+            "tasks":        tasks,
+        }
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"[focus-cache] regeneration failed: {e}")
+
+
 # ── Work Sessions sync ────────────────────────────────────────────────────────
 def sync_work_sessions_for_project(token, project_page_id, sessions_mappings):
     """
@@ -628,6 +698,7 @@ def sync_one_database(token, source_db_id, project_page_id, field_map, mappings,
             errors.append(f"'{task_name}': {e}")
             if emit: emit({"type": "task", "task": task_name, "action": "error", "detail": str(e)})
 
+    regenerate_focus_cache(token)
     return {"created": created, "updated": updated,
             "skipped": skipped, "deleted": deleted,
             "errors": errors, "new_tasks": new_tasks,
@@ -832,7 +903,9 @@ def quick_add_task(token, source_db_id, project_id, task_name,
                    task_name_field, backlink_field, session_start,
                    due_date="", priority="Normal", work_type="",
                    planned_end_field="", priority_field="", work_type_field="",
-                   category="", category_field=""):
+                   category="", category_field="",
+                   level="", level_field="",
+                   org_division="", org_division_field=""):
     """
     Create a task simultaneously in three places:
       1. Project WBS database  (source_db_id)
@@ -859,6 +932,12 @@ def quick_add_task(token, source_db_id, project_id, task_name,
     # Category — Notion auto-creates the option if it's a new value
     if category and category_field:
         wbs_props[category_field] = {"select": {"name": category}}
+    # Service Level — select field, Notion auto-creates new options
+    if level and level_field:
+        wbs_props[level_field] = {"select": {"name": level}}
+    # Organization / Division — plain text field
+    if org_division and org_division_field:
+        wbs_props[org_division_field] = p_text(org_division)
 
     r = requests.post(
         f"{NOTION_API}/pages",
@@ -926,6 +1005,7 @@ def quick_add_task(token, source_db_id, project_id, task_name,
     sessions_mappings[master_id] = ws_id
     save_sessions_mappings(sessions_mappings)
 
+    regenerate_focus_cache(token)
     return {
         "wbs_url":    wbs_page.get("url", ""),
         "master_url": master_page.get("url", ""),
@@ -1468,6 +1548,35 @@ def api_wbs_categories():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/wbs-text-options", methods=["POST"])
+def api_wbs_text_options():
+    """
+    Return unique non-empty values that exist in a text field across all rows
+    of a WBS database. Used by Quick Start to show previously used
+    Organization/Division values as suggestions.
+
+    Body: {token, db_id, field_name}
+    Returns: {options: ["value1", "value2", ...]}
+    """
+    body       = request.json or {}
+    token      = body.get("token", "").strip()
+    db_id      = body.get("db_id", "").strip()
+    field_name = body.get("field_name", "").strip()
+
+    if not token or not db_id or not field_name:
+        return jsonify({"options": []})
+    try:
+        pages = query_db(token, db_id)
+        seen = set()
+        for page in pages:
+            val = extract(page.get("properties", {}).get(field_name, {}))
+            if val and val.strip():
+                seen.add(val.strip())
+        return jsonify({"options": sorted(seen)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/quick-add", methods=["POST"])
 def api_quick_add():
     """Create a task in Project WBS + Master WBS + Work Sessions in one call."""
@@ -1485,8 +1594,12 @@ def api_quick_add():
     planned_end_field = body.get("planned_end_field", "")
     priority_field    = body.get("priority_field", "")
     work_type_field   = body.get("work_type_field", "")
-    category          = body.get("category", "").strip()       # selected or new category
-    category_field    = body.get("category_field", "").strip() # column name in WBS
+    category          = body.get("category", "").strip()
+    category_field    = body.get("category_field", "").strip()
+    level             = body.get("level", "").strip()
+    level_field       = body.get("level_field", "").strip()
+    org_division      = body.get("org_division", "").strip()
+    org_division_field= body.get("org_division_field", "").strip()
 
     if not all([token, source_db_id, project_id, task_name]):
         return jsonify({"error": "token, source_db_id, project_id, and task_name are all required"}), 400
@@ -1500,6 +1613,10 @@ def api_quick_add():
             work_type_field=work_type_field,
             category=category,
             category_field=category_field,
+            level=level,
+            level_field=level_field,
+            org_division=org_division,
+            org_division_field=org_division_field,
         )
         return jsonify({"ok": True, **result, "task_name": task_name})
     except requests.HTTPError as e:
@@ -1512,6 +1629,1294 @@ def api_quick_add():
         return jsonify({"error": f"Notion API {code}: {msg}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+# ── Focus Task List ───────────────────────────────────────────────────────────
+
+@app.route("/focus")
+def focus_page():
+    return render_template_string(FOCUS_HTML_PAGE)
+
+
+@app.route("/api/focus-tasks", methods=["POST"])
+def api_focus_tasks():
+    """
+    Read focus-task-list-cache.json, classify tasks into Overdue / Due Today /
+    Due This Week buckets, then check each task's Work Sessions for completion.
+
+    Body: {token}  — falls back to saved config token if omitted.
+    Returns: {today, week_end, overdue, due_today, this_week, generated_at, cache_task_count}
+    """
+    import datetime, os, json as _json
+
+    body  = request.json or {}
+    token = body.get("token", "").strip()
+    if not token:
+        cfg   = load_config()
+        token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No token — save one in the Sync Tool first"}), 400
+
+    # 1. Dates
+    today      = datetime.date.today()
+    week_end   = today + datetime.timedelta(days=7)
+    today_s    = today.isoformat()
+    week_end_s = week_end.isoformat()
+
+    # 2. Load cache
+    cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "focus-task-list-cache.json")
+    try:
+        with open(cache_path, encoding="utf-8") as f:
+            cache = _json.load(f)
+    except Exception as e:
+        return jsonify({"error": f"Cannot read cache: {e}"}), 500
+
+    all_tasks    = cache.get("tasks", [])
+    generated_at = cache.get("generated_at", "")
+    cache_count  = cache.get("task_count", len(all_tasks))
+
+    # 3. Classify into buckets
+    buckets = {"overdue": [], "due_today": [], "this_week": []}
+    for task in all_tasks:
+        pe = task.get("planned_end", "")
+        if not pe:
+            continue
+        if pe < today_s:
+            buckets["overdue"].append(task)
+        elif pe == today_s:
+            buckets["due_today"].append(task)
+        elif today_s < pe <= week_end_s:
+            buckets["this_week"].append(task)
+
+    # 4. Check completion: exclude tasks where every active Work Session is Completed
+    def is_completed(task):
+        ws_urls = task.get("work_sessions", [])
+        if not ws_urls:
+            return False
+        all_done = True
+        for url in ws_urls:
+            page_id = url.rstrip("/").split("/")[-1].replace("-", "")
+            if len(page_id) == 32:
+                page_id = f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
+            try:
+                r = requests.get(f"{NOTION_API}/pages/{page_id}",
+                                 headers=headers(token), timeout=8)
+                if not r.ok:
+                    all_done = False
+                    continue
+                data = r.json()
+                if data.get("archived") or data.get("in_trash"):
+                    continue  # trashed — ignore
+                status = extract(data.get("properties", {}).get("Status", {}))
+                if status != "Completed":
+                    all_done = False
+            except Exception:
+                all_done = False
+        return all_done
+
+    priority_order = {"Urgent": 0, "High": 1, "Normal": 2, "Low": 3}
+
+    def filter_and_sort(tasks, sort_by_date=False):
+        result = [t for t in tasks if not is_completed(t)]
+        if sort_by_date:
+            result.sort(key=lambda t: t.get("planned_end", ""))
+        else:
+            result.sort(key=lambda t: priority_order.get(t.get("priority", "Normal"), 2))
+        return result
+
+    return jsonify({
+        "today":            today_s,
+        "week_end":         week_end_s,
+        "overdue":          filter_and_sort(buckets["overdue"],   sort_by_date=True),
+        "due_today":        filter_and_sort(buckets["due_today"], sort_by_date=False),
+        "this_week":        filter_and_sort(buckets["this_week"], sort_by_date=True),
+        "generated_at":     generated_at,
+        "cache_task_count": cache_count,
+    })
+
+
+@app.route("/api/regenerate-focus-cache", methods=["POST"])
+def api_regenerate_focus_cache():
+    """Force-rebuild focus-task-list-cache.json from Notion."""
+    body  = request.json or {}
+    token = body.get("token", "").strip()
+    if not token:
+        cfg   = load_config()
+        token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No token"}), 400
+    try:
+        regenerate_focus_cache(token)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+FOCUS_HTML_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📌 Focus Tasks</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f4;
+    color: #1c1917;
+    min-height: 100vh;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid #e7e5e4;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+  .meta { font-size: 12px; color: #78716c; }
+  .btn {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background .15s;
+  }
+  .btn-primary   { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-secondary { background: #e7e5e4; color: #1c1917; }
+  .btn-secondary:hover { background: #d6d3d1; }
+  .btn:disabled  { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+
+  .loading, .error-box {
+    text-align: center;
+    padding: 60px 20px;
+    color: #78716c;
+    font-size: 15px;
+  }
+  .error-box { color: #dc2626; }
+
+  .bucket { margin-bottom: 28px; }
+  .bucket-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .bucket-header h2 { font-size: 15px; font-weight: 600; }
+  .count-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: #e7e5e4;
+    color: #57534e;
+  }
+  .empty-msg { font-size: 14px; color: #78716c; padding: 12px 0; }
+
+  .task-card {
+    background: #fff;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .task-card:hover { border-color: #a8a29e; }
+  .priority-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .dot-urgent { background: #dc2626; }
+  .dot-high   { background: #f97316; }
+  .dot-normal { background: #3b82f6; }
+  .dot-low    { background: #a8a29e; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1c1917;
+    text-decoration: none;
+  }
+  .task-name:hover { text-decoration: underline; }
+  .task-meta {
+    font-size: 12px;
+    color: #78716c;
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .task-notes {
+    font-size: 12px;
+    color: #57534e;
+    margin-top: 5px;
+    font-style: italic;
+  }
+  .tag { padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #f5f5f4; color: #57534e; }
+  .tag-urgent { background: #fee2e2; color: #dc2626; }
+  .tag-high   { background: #ffedd5; color: #c2410c; }
+
+  .summary-bar {
+    background: #fff;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+    color: #57534e;
+  }
+  .summary-bar strong { color: #1c1917; }
+
+  .all-clear { text-align: center; padding: 60px 20px; font-size: 28px; }
+  .all-clear p { font-size: 15px; color: #78716c; margin-top: 8px; }
+
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid #e7e5e4;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📌 Focus Tasks</h1>
+  <span class="meta" id="meta-line">—</span>
+  <button class="btn btn-secondary" id="btn-rebuild" onclick="rebuildCache()"
+          title="Re-query Notion and rebuild the local task cache">🔄 Rebuild cache</button>
+  <button class="btn btn-primary"   id="btn-refresh" onclick="loadFocus()">Refresh</button>
+  <a href="/" class="btn btn-secondary" style="text-decoration:none;">← Sync Tool</a>
+</header>
+
+<main id="main-content">
+  <div class="loading"><span class="spinner"></span> Loading focus tasks…</div>
+</main>
+
+<script>
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-US", {month:"short", day:"numeric"});
+}
+
+function priorityDot(p) {
+  const cls = {Urgent:"dot-urgent", High:"dot-high", Normal:"dot-normal", Low:"dot-low"}[p] || "dot-normal";
+  return `<div class="priority-dot ${cls}"></div>`;
+}
+
+function priorityTag(p) {
+  if (p === "Urgent") return `<span class="tag tag-urgent">Urgent</span>`;
+  if (p === "High")   return `<span class="tag tag-high">High</span>`;
+  return "";
+}
+
+function renderTask(t, showDue) {
+  const due   = showDue && t.planned_end ? ` · Due ${fmtDate(t.planned_end)}` : "";
+  const wt    = t.work_type ? ` · ${t.work_type}` : "";
+  const proj  = t.project_name ? `<span>${t.project_name}</span>` : "";
+  const ptag  = priorityTag(t.priority);
+  const notes = t.notes ? `<div class="task-notes">${t.notes}</div>` : "";
+  return `
+    <div class="task-card">
+      ${priorityDot(t.priority)}
+      <div class="task-body">
+        <a class="task-name" href="${t.url.replace('https://', 'notion://')}">${t.name}</a>
+        <div class="task-meta">${proj}${ptag}<span>${t.priority}${due}${wt}</span></div>
+        ${notes}
+      </div>
+    </div>`;
+}
+
+function renderBucket(label, emoji, tasks, showDue, weekEnd) {
+  const weekNote = label === "Due This Week" && weekEnd
+    ? ` <span style="font-weight:400;color:#78716c;font-size:13px;">through ${fmtDate(weekEnd)}</span>`
+    : "";
+  const emptyMsg = {
+    "Overdue":       "✅ Nothing overdue — great!",
+    "Due Today":     "📭 Nothing due today.",
+    "Due This Week": "📭 Nothing due in the next 7 days.",
+  }[label] || "";
+  const body = tasks.length === 0
+    ? `<div class="empty-msg">${emptyMsg}</div>`
+    : tasks.map(t => renderTask(t, showDue)).join("");
+  return `
+    <div class="bucket">
+      <div class="bucket-header">
+        <h2>${emoji} ${label}${weekNote}</h2>
+        <span class="count-badge">${tasks.length}</span>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function setButtons(loading) {
+  document.getElementById("btn-refresh").disabled = loading;
+  document.getElementById("btn-rebuild").disabled = loading;
+  document.getElementById("btn-refresh").innerHTML = loading
+    ? '<span class="spinner"></span>Loading…' : "Refresh";
+}
+
+async function loadFocus() {
+  setButtons(true);
+  const main = document.getElementById("main-content");
+  main.innerHTML = '<div class="loading"><span class="spinner"></span> Checking task statuses…</div>';
+  try {
+    const res  = await fetch("/api/focus-tasks", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+
+    const total  = data.overdue.length + data.due_today.length + data.this_week.length;
+    const all    = [...data.overdue, ...data.due_today, ...data.this_week];
+    const urgent = all.filter(t => t.priority === "Urgent").length;
+    const high   = all.filter(t => t.priority === "High").length;
+
+    const genAt = data.generated_at
+      ? new Date(data.generated_at).toLocaleString("en-US",
+          {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})
+      : "—";
+    document.getElementById("meta-line").textContent =
+      `Cache: ${genAt} · ${data.cache_task_count} tasks total`;
+
+    if (total === 0) {
+      main.innerHTML = `<div class="all-clear">🎉<p>No tasks due or overdue. Enjoy the breathing room!</p></div>`;
+      return;
+    }
+
+    const summary = `<div class="summary-bar">
+      <span>Needing attention: <strong>${total}</strong></span>
+      <span>🔴 Overdue: <strong>${data.overdue.length}</strong></span>
+      <span>🟡 Due today: <strong>${data.due_today.length}</strong></span>
+      <span>🔵 This week: <strong>${data.this_week.length}</strong></span>
+      ${urgent ? `<span>🚨 Urgent: <strong>${urgent}</strong></span>` : ""}
+      ${high   ? `<span>⚠️ High: <strong>${high}</strong></span>` : ""}
+    </div>`;
+
+    main.innerHTML = summary
+      + renderBucket("Overdue",       "🔴", data.overdue,   true,  null)
+      + renderBucket("Due Today",     "🟡", data.due_today, false, null)
+      + renderBucket("Due This Week", "🔵", data.this_week, true,  data.week_end);
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    setButtons(false);
+  }
+}
+
+async function rebuildCache() {
+  document.getElementById("btn-rebuild").innerHTML = '<span class="spinner"></span>Rebuilding…';
+  setButtons(true);
+  try {
+    const res  = await fetch("/api/regenerate-focus-cache", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    await loadFocus();
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    setButtons(false);
+  }
+}
+
+function showError(msg) {
+  document.getElementById("main-content").innerHTML =
+    `<div class="error-box">⚠️ ${msg}<br><br>
+     Make sure the sync tool has a valid Notion token configured.</div>`;
+  setButtons(false);
+}
+
+loadFocus();
+</script>
+</body>
+</html>"""
+
+
+# ── Workload Dashboard ────────────────────────────────────────────────────────
+
+@app.route("/workload")
+def workload_page():
+    return render_template_string(WORKLOAD_HTML_PAGE)
+
+
+@app.route("/design")
+def design_page():
+    return render_template_string(DESIGN_HTML_PAGE)
+
+
+@app.route("/api/workload", methods=["POST"])
+def api_workload():
+    """
+    Query Work Sessions for a date range and return aggregated workload data.
+
+    Body: {token?, mode, start_date?, end_date?}
+    mode: "today" | "this_week" | "last_week" | "this_month" | "custom"
+    Returns: {start_date, end_date, total_hours, session_count, project_count,
+              by_project, by_work_type, sessions}
+    """
+    import datetime as _dt
+
+    body  = request.json or {}
+    token = body.get("token", "").strip()
+    if not token:
+        cfg   = load_config()
+        token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No token — save one in the Sync Tool first"}), 400
+
+    mode   = body.get("mode", "this_week")
+    today  = _dt.date.today()
+
+    if mode == "today":
+        start = end = today
+    elif mode == "this_week":
+        start = today - _dt.timedelta(days=today.weekday())   # Monday
+        end   = start + _dt.timedelta(days=6)                 # Sunday
+    elif mode == "last_week":
+        start = today - _dt.timedelta(days=today.weekday() + 7)
+        end   = start + _dt.timedelta(days=6)
+    elif mode == "this_month":
+        start = today.replace(day=1)
+        end   = today
+    elif mode == "custom":
+        try:
+            start = _dt.date.fromisoformat(body.get("start_date", ""))
+            end   = _dt.date.fromisoformat(body.get("end_date", ""))
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid custom date range"}), 400
+    else:
+        start = today - _dt.timedelta(days=today.weekday())
+        end   = start + _dt.timedelta(days=6)
+
+    start_s = start.isoformat()
+    end_s   = end.isoformat()
+
+    # Query Work Sessions in the date window
+    filter_body = {"and": [
+        {"property": "Session Start", "date": {"on_or_after":  start_s}},
+        {"property": "Session Start", "date": {"on_or_before": end_s + "T23:59:59"}},
+    ]}
+    try:
+        raw_sessions = query_db(token, WORK_SESSIONS_DB_ID, filter_body)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    # Batch-fetch project names for unique project IDs in result
+    project_ids = set()
+    for s in raw_sessions:
+        for rel in s["properties"].get("Project", {}).get("relation", []):
+            project_ids.add(rel["id"])
+
+    project_names = {}
+    for pid in project_ids:
+        try:
+            r = requests.get(f"{NOTION_API}/pages/{pid}",
+                             headers=headers(token), timeout=8)
+            if r.ok:
+                props = r.json().get("properties", {})
+                for val in props.values():
+                    if val.get("type") == "title":
+                        name = extract(val)
+                        if name:
+                            project_names[pid] = name
+                            break
+        except Exception:
+            pass
+
+    # Process sessions
+    result_sessions = []
+    by_project   = {}
+    by_work_type = {}
+    total_hours  = 0.0
+
+    for s in raw_sessions:
+        props = s["properties"]
+
+        name = extract(props.get("Session Name", {})) or "Work Session"
+
+        start_raw = extract(props.get("Session Start", {}))
+        sess_start = start_raw["start"] if isinstance(start_raw, dict) else (start_raw or "")
+        end_raw = extract(props.get("Session End", {}))
+        sess_end = end_raw["start"] if isinstance(end_raw, dict) else (end_raw or "")
+
+        # Duration is a formula (number type)
+        dur_formula = props.get("Duration", {}).get("formula", {})
+        duration = dur_formula.get("number") if dur_formula.get("type") == "number" else None
+
+        work_type = extract(props.get("Work Type", {})) or "Unclassified"
+        status    = extract(props.get("Status", {})) or "—"
+
+        proj_rels = props.get("Project", {}).get("relation", [])
+        proj_id   = proj_rels[0]["id"] if proj_rels else ""
+        proj_name = project_names.get(proj_id, "Unknown Project")
+
+        pid_clean = s["id"].replace("-", "")
+        result_sessions.append({
+            "name":      name,
+            "start":     sess_start,
+            "end":       sess_end,
+            "duration":  duration,
+            "work_type": work_type,
+            "status":    status,
+            "project":   proj_name,
+            "url":       f"https://app.notion.com/p/{pid_clean}",
+        })
+
+        if duration:
+            total_hours += duration
+            by_project[proj_name]   = by_project.get(proj_name, 0)   + duration
+            by_work_type[work_type] = by_work_type.get(work_type, 0) + duration
+
+    result_sessions.sort(key=lambda s: s["start"], reverse=True)
+    by_project_list   = sorted(by_project.items(),   key=lambda x: x[1], reverse=True)
+    by_work_type_list = sorted(by_work_type.items(), key=lambda x: x[1], reverse=True)
+
+    return jsonify({
+        "start_date":    start_s,
+        "end_date":      end_s,
+        "total_hours":   round(total_hours, 2),
+        "session_count": len(result_sessions),
+        "project_count": len(by_project),
+        "by_project":    [{"name": k, "hours": round(v, 2)} for k, v in by_project_list],
+        "by_work_type":  [{"name": k, "hours": round(v, 2)} for k, v in by_work_type_list],
+        "sessions":      result_sessions,
+    })
+
+
+@app.route("/api/writeback-dates", methods=["POST"])
+def api_writeback_dates():
+    """
+    Read Planned Start + Planned End from every Master WBS task that has a
+    mapping entry, then write those dates back to the corresponding Project WBS
+    row using the field names from notion_sync_config.json.
+
+    Body: {token?}
+    Returns: {ok, updated, skipped, errors}
+    """
+    body  = request.json or {}
+    token = body.get("token", "").strip()
+    if not token:
+        cfg   = load_config()
+        token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No token"}), 400
+
+    # Invert mappings: master_task_id → {source_page_id, db_id}
+    mappings = load_mappings()   # source_page_id → {master_id, db}
+    inverted = {}
+    for src_page, info in mappings.items():
+        mid   = info.get("master_id", "")
+        db_id = info.get("db", "")
+        if mid:
+            inverted[mid] = {"source_page_id": src_page, "db_id": db_id}
+
+    if not inverted:
+        return jsonify({"error": "No task mappings found — run a sync first"}), 400
+
+    # Field names per source DB: db_id → {planned_start, planned_end}
+    sources = load_config().get("sources", {})
+    db_fields = {
+        db_id: {
+            "planned_start": src.get("field_map", {}).get("planned_start", ""),
+            "planned_end":   src.get("field_map", {}).get("planned_end",   ""),
+        }
+        for db_id, src in sources.items()
+    }
+
+    # Fetch all Master WBS tasks that have at least one date set
+    try:
+        master_pages = query_db(token, MASTER_DB_ID, {"or": [
+            {"property": "Planned End",   "date": {"is_not_empty": True}},
+            {"property": "Planned Start", "date": {"is_not_empty": True}},
+        ]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    updated, skipped, errors = 0, 0, []
+    for page in master_pages:
+        mid = page["id"]
+        if mid not in inverted:
+            skipped += 1
+            continue
+
+        src_page_id = inverted[mid]["source_page_id"]
+        db_id       = inverted[mid]["db_id"]
+        fields      = db_fields.get(db_id, {})
+
+        props = page["properties"]
+        ps_raw = extract(props.get("Planned Start", {}))
+        pe_raw = extract(props.get("Planned End",   {}))
+        planned_start = ps_raw["start"] if isinstance(ps_raw, dict) else ps_raw
+        planned_end   = pe_raw["start"] if isinstance(pe_raw, dict) else pe_raw
+
+        patch = {}
+        if planned_start and fields.get("planned_start"):
+            patch[fields["planned_start"]] = p_date({"start": planned_start})
+        if planned_end and fields.get("planned_end"):
+            patch[fields["planned_end"]]   = p_date({"start": planned_end})
+
+        if not patch:
+            skipped += 1
+            continue
+
+        for attempt in range(2):
+            try:
+                r = requests.patch(f"{NOTION_API}/pages/{src_page_id}",
+                                   headers=headers(token),
+                                   json={"properties": patch},
+                                   timeout=20)
+                r.raise_for_status()
+                updated += 1
+                break
+            except requests.exceptions.Timeout:
+                if attempt == 0:
+                    import time; time.sleep(2)
+                    continue
+                errors.append(f"Timeout after retry: page {src_page_id}")
+            except Exception as e:
+                errors.append(str(e))
+                break
+
+    return jsonify({"ok": True, "updated": updated,
+                    "skipped": skipped, "errors": errors[:5]})
+
+
+# ── System Design Doc ─────────────────────────────────────────────────────────
+DESIGN_HTML_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty PM System — Design Document</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #21253a;
+    --border: #2e3248; --accent: #6c8ef7; --accent2: #a78bfa;
+    --accent3: #34d399; --accent4: #f59e0b; --accent5: #f87171;
+    --text: #e2e8f0; --muted: #8892a4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px 60px; }
+  .hero { padding: 36px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+  .hero-tag { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .hero h1 { font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .hero p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .tabs { display: flex; gap: 4px; background: var(--surface); border-radius: 10px; padding: 4px; margin-bottom: 28px; position: sticky; top: 8px; z-index: 10; }
+  .tab { flex: 1; text-align: center; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 7px; color: var(--muted); transition: all .15s; border: none; background: none; }
+  .tab.active { background: var(--surface2); color: var(--text); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .section { display: none; animation: fadein .2s ease; }
+  .section.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+  .card h3 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+  .card p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .sec-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .arch { display: flex; flex-direction: column; gap: 0; }
+  .arch-layer { display: flex; align-items: stretch; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .arch-connector { display: flex; align-items: center; justify-content: center; padding: 6px 0; color: var(--muted); font-size: 11px; gap: 8px; letter-spacing: .05em; }
+  .arch-connector::before, .arch-connector::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .layer-num { width: 28px; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-right: 6px; align-self: flex-start; }
+  .layer-body { flex: 1; }
+  .layer-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .layer-desc { font-size: 12px; color: var(--muted); }
+  .layer-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px; margin-top: 8px; }
+  .l1 { border-left: 3px solid var(--accent3); } .l2 { border-left: 3px solid var(--accent); } .l3 { border-left: 3px solid var(--accent2); }
+  .n1 { background: rgba(52,211,153,.15); color: var(--accent3); } .n2 { background: rgba(108,142,247,.15); color: var(--accent); } .n3 { background: rgba(167,139,250,.15); color: var(--accent2); }
+  .badge-n1 { background: rgba(52,211,153,.12); color: var(--accent3); } .badge-n2 { background: rgba(108,142,247,.12); color: var(--accent); } .badge-n3 { background: rgba(167,139,250,.12); color: var(--accent2); }
+  .flow { display: flex; flex-direction: column; }
+  .flow-step { display: flex; gap: 16px; align-items: flex-start; }
+  .flow-line { display: flex; flex-direction: column; align-items: center; }
+  .flow-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-vline { width: 2px; flex: 1; min-height: 24px; background: var(--border); }
+  .flow-content { flex: 1; padding-bottom: 24px; padding-top: 4px; }
+  .flow-content h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .flow-content p { font-size: 12px; color: var(--muted); }
+  .flow-content code { font-family: 'SF Mono', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; color: var(--accent4); }
+  .proj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .proj-table th { text-align: left; padding: 8px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600; }
+  .proj-table td { padding: 10px 12px; border-bottom: 1px solid rgba(46,50,72,.6); vertical-align: top; }
+  .proj-table tr:last-child td { border-bottom: none; }
+  .proj-table tr:hover td { background: rgba(108,142,247,.04); }
+  .cat-pill { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 100px; }
+  .cat-teach { background: rgba(52,211,153,.12); color: var(--accent3); }
+  .cat-research { background: rgba(108,142,247,.12); color: var(--accent); }
+  .cat-design { background: rgba(245,158,11,.12); color: var(--accent4); }
+  .cat-prog { background: rgba(248,113,113,.12); color: var(--accent5); }
+  .cat-svc { background: rgba(167,139,250,.12); color: var(--accent2); }
+  .db-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .db-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .db-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .db-icon { font-size: 18px; }
+  .db-name { font-size: 13px; font-weight: 700; }
+  .db-id { font-family: 'SF Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+  .db-field { display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(46,50,72,.4); }
+  .db-field:last-child { border-bottom: none; }
+  .db-field-name { color: var(--muted); } .db-field-val { color: var(--text); font-weight: 500; }
+  .config-block { background: var(--surface2); border-radius: 8px; padding: 14px 16px; font-family: 'SF Mono', monospace; font-size: 11px; line-height: 1.8; overflow-x: auto; }
+  .cfg-key { color: #6c8ef7; } .cfg-val { color: #a78bfa; } .cfg-str { color: #34d399; } .cfg-bool { color: #f59e0b; } .cfg-comment { color: var(--muted); font-style: italic; }
+  .rule-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .rule-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 13px; }
+  .rule-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .rule-text { color: var(--muted); }
+  .rule-text strong { color: var(--text); }
+  .status-chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sc-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 12px; }
+  .sc-box strong { display: block; font-size: 13px; margin-bottom: 2px; }
+  .sc-box span { color: var(--muted); font-size: 11px; }
+  .sc-arrow { color: var(--muted); font-size: 18px; }
+  .warn { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.2); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--accent4); display: flex; gap: 10px; align-items: flex-start; }
+  .footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-tag">Foundational Design Document &middot; v1.0 &middot; June 2026</div>
+    <h1>&#x1F5C2;&#xFE0F; Faculty PM System</h1>
+    <p>Automated project management for a multi-faceted faculty role &mdash; built on Notion + Python/Flask</p>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" onclick="show('arch')">Architecture</button>
+    <button class="tab" onclick="show('flow')">Data Flow</button>
+    <button class="tab" onclick="show('projects')">Projects</button>
+    <button class="tab" onclick="show('databases')">Databases</button>
+    <button class="tab" onclick="show('config')">Config &amp; Rules</button>
+  </div>
+
+  <!-- ARCHITECTURE -->
+  <div class="section active" id="arch">
+    <div class="sec-label">System Overview</div>
+    <div class="card" style="margin-bottom:20px">
+      <p><strong style="color:var(--text)">Goal:</strong> Automatically track actual workload across a multi-faceted faculty role (Teaching, Research, Program Management, Service, Design) with zero manual data entry overhead &mdash; using Notion as the front-end and a local Python daemon as the automation layer.</p>
+    </div>
+    <div class="sec-label">Three-Layer Architecture</div>
+    <div class="arch">
+      <div class="arch-layer l1">
+        <div class="layer-num n1">1</div>
+        <div class="layer-body">
+          <div class="layer-name">&#x1F4CB; Project WBS Databases <span style="font-weight:400;font-size:12px;color:var(--muted)">(Planning Portal)</span></div>
+          <div class="layer-desc">One dedicated Notion database per project. Author and edit tasks here &mdash; add rows, set due dates, adjust priorities, track phases. Currently 8 active WBS databases covering all work areas. Lives on each project hub page.</div>
+          <span class="layer-badge badge-n1">User edits here &middot; Source of truth</span>
+        </div>
+      </div>
+      <div class="arch-connector">&darr; Python sync pushes changes</div>
+      <div class="arch-layer l2">
+        <div class="layer-num n2">2</div>
+        <div class="layer-body">
+          <div class="layer-name">&#x1F4CB; Master WBS Tasks <span style="font-weight:400;font-size:12px;color:var(--muted)">(Implementation Tracking)</span></div>
+          <div class="layer-desc">Single aggregated Notion database consolidating tasks from all project WBSes into one canonical list. The Python sync tool writes here &mdash; never edit directly. Powers cross-project views, focus lists, and status rollups.</div>
+          <span class="layer-badge badge-n2">Auto-written by sync tool &middot; Never edit directly</span>
+        </div>
+      </div>
+      <div class="arch-connector">&darr; Sync creates sessions &middot; Status propagates up</div>
+      <div class="arch-layer l3">
+        <div class="layer-num n3">3</div>
+        <div class="layer-body">
+          <div class="layer-name">&#x23F1;&#xFE0F; Work Sessions <span style="font-weight:400;font-size:12px;color:var(--muted)">(Time-Logging Layer)</span></div>
+          <div class="layer-desc">Time log entries linked to both a task (Master WBS) and a project (Projects DB). Created via Quick Start. The Status field on sessions drives the Auto Status formula in Master WBS, which rolls up to Project WBS via relation.</div>
+          <span class="layer-badge badge-n3">Status origin &middot; Drives auto-status chain</span>
+        </div>
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:28px">Status Auto-Propagation Chain</div>
+    <div class="card">
+      <div class="status-chain">
+        <div class="sc-box"><strong>&#x23F1;&#xFE0F; Work Session</strong><span>Status field<br>(set manually)</span></div>
+        <div class="sc-arrow">&rarr;</div>
+        <div class="sc-box"><strong>&#x1F4CB; Master WBS</strong><span>Auto Status<br>(formula &mdash; reads sessions)</span></div>
+        <div class="sc-arrow">&rarr;</div>
+        <div class="sc-box"><strong>&#x1F4CB; Project WBS</strong><span>Auto Status<br>(rollup via relation)</span></div>
+      </div>
+      <p style="margin-top:14px;font-size:12px;">All status propagation is automatic. The only manual input is marking a Work Session as &ldquo;Completed.&rdquo; Note: the <code>Auto Status</code> formula field is not readable via the Notion API (returns opaque URL). For programmatic checks, fetch the Work Sessions relation and inspect their <code>Status</code> fields directly.</p>
+    </div>
+    <div class="sec-label" style="margin-top:16px">Work Areas Covered</div>
+    <div class="grid3">
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F393;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Teaching &amp; Mentoring</div><div style="font-size:11px;color:var(--muted)">Course instruction, student advising, workshop facilitation</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F52C;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Research &amp; Scholarship</div><div style="font-size:11px;color:var(--muted)">Scoping reviews, collaborative papers, team projects</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F3A8;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Instructional Design</div><div style="font-size:11px;color:var(--muted)">Course design &amp; development projects</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F4CA;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Program Management</div><div style="font-size:11px;color:var(--muted)">Reactive PM: advising, inquiries, email responses</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F91D;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Professional Services</div><div style="font-size:11px;color:var(--muted)">Service work, external commitments</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x2699;&#xFE0F;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Admin &amp; Ops / PD</div><div style="font-size:11px;color:var(--muted)">Administrative tasks, self-learning</div></div>
+    </div>
+  </div>
+
+  <!-- DATA FLOW -->
+  <div class="section" id="flow">
+    <div class="sec-label">Sync Tool</div>
+    <div class="card" style="margin-bottom:20px">
+      <p>The sync tool (<code>notion_wbs_sync.py</code>) is a local Flask web app at <strong style="color:var(--text)">localhost:8765</strong>. One-directional bridge: reads from Project WBS databases, writes to Master WBS Tasks and Work Sessions. State is persisted in JSON mapping files for idempotent upserts.</p>
+    </div>
+    <div class="sec-label">Process Flow</div>
+    <div class="flow">
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(52,211,153,.15);color:var(--accent3)">1</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Edit tasks in Project WBS</h4><p>Add/update rows directly in Notion. Set Task name, Due Date, Priority, Notes, Phase/Category. This is the only manual step.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">2</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Run sync tool &rarr; Sync tab &rarr; Sync Now</h4><p>Reads all configured WBS databases via Notion API. Maps columns using <code>field_map</code> in config. Normalizes status/priority values.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">3</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Upsert into Master WBS Tasks</h4><p>Checks <code>notion_sync_mappings.json</code> for existing mapping. New &rarr; CREATE + write backlink. Existing &rarr; UPDATE changed fields only. Status set ONLY on CREATE.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(167,139,250,.15);color:var(--accent2)">4</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Create Work Session (Quick Start)</h4><p>Via Quick Start tab: creates session linked to Master WBS task + Projects DB entry. Mapping persisted in <code>notion_sessions_mappings.json</code>.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(245,158,11,.15);color:var(--accent4)">5</div></div><div class="flow-content"><h4>Status propagates automatically</h4><p>Mark Work Session Status = &ldquo;Completed&rdquo; in Notion &rarr; Master WBS Auto Status formula updates &rarr; Project WBS Auto Status rollup reflects completion.</p></div></div>
+    </div>
+    <div class="sec-label" style="margin-top:4px">Key Sync Behaviors</div>
+    <div class="grid2">
+      <div class="card"><div class="card-title">Idempotent Upserts</div><p>Mapping files track every synced task/session. Re-running sync updates existing records &mdash; never creates duplicates.</p></div>
+      <div class="card"><div class="card-title">One-Directional Only</div><p>Project WBS &rarr; Master WBS. Changes to Master WBS directly are NOT reflected back. Always edit in the source WBS.</p></div>
+      <div class="card"><div class="card-title">Status Protection</div><p>Status is written ONLY on CREATE in Master WBS. Never overwritten on UPDATE &mdash; protects the Auto Status formula from being clobbered.</p></div>
+      <div class="card"><div class="card-title">Value Normalization</div><p>Status and Priority strings normalized on sync: &ldquo;Todo / Not Started&rdquo; &rarr; Not Started &middot; &ldquo;Done / Finished&rdquo; &rarr; Completed &middot; &ldquo;Urgent / Critical&rdquo; &rarr; Urgent.</p></div>
+    </div>
+    <div class="sec-label">State Files</div>
+    <div class="grid3">
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">notion_sync_config.json</div><div style="font-size:11px;color:var(--muted)">Token + all source WBS DB IDs, project mappings, field maps. Edit to add/reconfigure projects.</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px">notion_sync_mappings.json</div><div style="font-size:11px;color:var(--muted)">Source task ID &rarr; Master WBS page ID. ~120 entries. Auto-generated.</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent3);margin-bottom:6px">notion_sessions_mappings.json</div><div style="font-size:11px;color:var(--muted)">Master task &rarr; Work Session page ID. ~241 entries. Auto-generated.</div></div>
+    </div>
+  </div>
+
+  <!-- PROJECTS -->
+  <div class="section" id="projects">
+    <div class="sec-label">Active Projects (8 WBS Databases)</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="proj-table">
+        <thead><tr><th>Project Name</th><th>Category</th><th>WBS DB ID</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>EDG 6648 Summer 2026 Instruction</strong></td><td><span class="cat-pill cat-teach">Teaching</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">001e7ca9&hellip;</td><td style="font-size:11px;color:var(--muted)">Category field</td></tr>
+          <tr><td><strong>EDG 6648 Course Design</strong></td><td><span class="cat-pill cat-design">Design</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">b4f7bdc6&hellip;</td><td style="font-size:11px;color:var(--muted)">Task Type field</td></tr>
+          <tr><td><strong>Beyond the LXD Label Scoping Review</strong></td><td><span class="cat-pill cat-research">Research</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">48cc032e&hellip;</td><td style="font-size:11px;color:var(--muted)">Hub nested under Research Projects DB row</td></tr>
+          <tr><td><strong>AI &amp; PjBL Scoping Review</strong></td><td><span class="cat-pill cat-research">Research</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">8ca11592&hellip;</td><td style="font-size:11px;color:var(--muted)">Phase field; auto_calc_planned_start</td></tr>
+          <tr><td><strong>CS Ed EdD Cohort 2 Summer Workshop 2026</strong></td><td><span class="cat-pill cat-teach">Teaching</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">79345a33&hellip;</td><td style="font-size:11px;color:var(--muted)">Student-facing; under Teaching hub</td></tr>
+          <tr><td><strong>Program Management</strong></td><td><span class="cat-pill cat-prog">Program Mgmt</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">53cdd7a1&hellip;</td><td style="font-size:11px;color:var(--muted)">Reactive tasks; flat hub structure</td></tr>
+          <tr><td><strong>Professional Services</strong></td><td><span class="cat-pill cat-svc">Service</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">8d83590f&hellip;</td><td style="font-size:11px;color:var(--muted)">Level + Org/Division fields</td></tr>
+          <tr><td><strong>CS+AI Competency Job Posts Analysis</strong></td><td><span class="cat-pill cat-research">Research</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">cd502046&hellip;</td><td style="font-size:11px;color:var(--muted)">Type field; Start Date field</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="sec-label" style="margin-top:28px">Hub Page Standard Structure</div>
+    <div class="card">
+      <p style="margin-bottom:12px">Every project hub page follows this required structure:</p>
+      <div class="config-block">
+<span class="cfg-comment"># Project Hub Page Template</span><br><br>
+&lt;Project title heading&gt;<br>
+&lt;Description / context sections&gt;<br>
+---<br>
+<span class="cfg-key">## &#x1F4CB; WBS</span><br>
+<span class="cfg-comment">  &larr; Embedded WBS database (inline, full-page width)</span><br><br>
+---<br>
+<span class="cfg-key">## &#x23F1;&#xFE0F; Work Sessions</span><br>
+<span class="cfg-comment">  &larr; Inline linked view of Work Sessions DB</span><br>
+<span class="cfg-comment">  &larr; Filter: Project = this project (set manually once)</span>
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:16px">Project Placement Rules</div>
+    <ul class="rule-list">
+      <li><span class="rule-icon">&#x1F4C1;</span><span class="rule-text"><strong>Always create a &#x1F4C1; Projects DB entry</strong> for every new project &mdash; this is what Work Sessions &ldquo;Project&rdquo; relation links to. Tagged by category.</span></li>
+      <li><span class="rule-icon">&#x1F52C;</span><span class="rule-text"><strong>Research projects get two records:</strong> a &#x1F4C1; Projects DB entry (for time logging) AND a &#x1F38D; Research Projects DB entry (for research tracking). Hub page nests under the Research Projects DB row.</span></li>
+      <li><span class="rule-icon">&#x1F4CD;</span><span class="rule-text"><strong>Hub page placement is separate from DB entry.</strong> Place hub pages nested under their section&rsquo;s DB row in the sidebar hierarchy.</span></li>
+    </ul>
+  </div>
+
+  <!-- DATABASES -->
+  <div class="section" id="databases">
+    <div class="sec-label">Global Tracking Databases</div>
+    <div class="db-grid">
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x1F4C1;</span><div><div class="db-name">Projects DB</div><div class="db-id">Page: 01705bad&hellip; &middot; Col: 80ee95ce&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Relation target for Work Sessions</span></div><div class="db-field"><span class="db-field-name">Key field</span><span class="db-field-val">Category (Teaching, Research&hellip;)</span></div><div class="db-field"><span class="db-field-name">Count</span><span class="db-field-val">One entry per active project</span></div></div>
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x1F4CB;</span><div><div class="db-name">Master WBS Tasks</div><div class="db-id">DB: 2de3b2f3&hellip; &middot; Col: 94fa9ee4&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Consolidated task tracking</span></div><div class="db-field"><span class="db-field-name">Key formula</span><span class="db-field-val">Auto Status (reads Work Sessions)</span></div><div class="db-field"><span class="db-field-name">Count</span><span class="db-field-val">~120 task entries</span></div></div>
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x23F1;&#xFE0F;</span><div><div class="db-name">Work Sessions</div><div class="db-id">Page: 308c193f&hellip; &middot; Col: b3982f2e&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Time-logging layer</span></div><div class="db-field"><span class="db-field-name">Relations</span><span class="db-field-val">Project &rarr; &#x1F4C1; Projects DB &middot; Task &rarr; Master WBS</span></div><div class="db-field"><span class="db-field-name">Count</span><span class="db-field-val">~241 session entries</span></div></div>
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x1F38D;</span><div><div class="db-name">Research Projects DB</div><div class="db-id">Page: 08ca3525&hellip; &middot; Col: 8608ff79&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Research-specific tracking</span></div><div class="db-field"><span class="db-field-name">Schema</span><span class="db-field-val">Stages, Status, Team Members, Lead, Due</span></div><div class="db-field"><span class="db-field-name">Location</span><span class="db-field-val">Research &amp; Scholarship hub</span></div></div>
+    </div>
+    <div class="sec-label" style="margin-top:28px">Known API Limitation</div>
+    <div class="warn"><span style="flex-shrink:0;font-size:15px">&#x26A0;&#xFE0F;</span><div><strong>Auto Status formula not readable via API.</strong> The Notion MCP returns formula values as opaque <code style="font-family:monospace;font-size:10px;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px;">formulaResult://&hellip;</code> URLs. To check task completion programmatically: fetch the task&rsquo;s linked Work Sessions, then check each session&rsquo;s <code style="font-family:monospace;font-size:10px;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px;">Status</code> field. A task is done when all non-deleted sessions are &ldquo;Completed.&rdquo;</div></div>
+  </div>
+
+  <!-- CONFIG & RULES -->
+  <div class="section" id="config">
+    <div class="sec-label">Config Schema &mdash; notion_sync_config.json</div>
+    <div class="card">
+      <p style="margin-bottom:14px;font-size:12px">One entry per source WBS database. The <code>sources</code> key is a dict keyed by WBS Notion DB ID (UUID with hyphens).</p>
+      <div class="config-block">
+<span class="cfg-key">"sources"</span>: {<br>
+&nbsp;&nbsp;<span class="cfg-str">"&lt;wbs-db-uuid&gt;"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"db_title"</span>: <span class="cfg-str">"WBS &mdash; Project Name"</span>, <span class="cfg-comment">// display name</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"project_id"</span>: <span class="cfg-str">"&lt;projects-db-entry-uuid&gt;"</span>, <span class="cfg-comment">// &#x1F4C1; Projects DB entry ID</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"backlink_field"</span>: <span class="cfg-str">"Master WBS"</span>, <span class="cfg-comment">// relation column in Project WBS</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"auto_calc_planned_start"</span>: <span class="cfg-bool">true</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"field_map"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"task_name"</span>: <span class="cfg-str">"Task"</span>, <span class="cfg-comment">// REQUIRED</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"priority"</span>: <span class="cfg-str">"Priority"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"planned_end"</span>: <span class="cfg-str">"Due Date"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"notes"</span>: <span class="cfg-str">"Notes"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"category"</span>: <span class="cfg-str">"Phase"</span> <span class="cfg-comment">// "Category", "Phase", etc.</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:20px">Design Rules &amp; Invariants</div>
+    <ul class="rule-list">
+      <li><span class="rule-icon">&#x1F512;</span><span class="rule-text"><strong>Never edit Master WBS Tasks directly.</strong> All changes must originate in a Project WBS and flow through the sync tool.</span></li>
+      <li><span class="rule-icon">&#x1F501;</span><span class="rule-text"><strong>Status written only on CREATE.</strong> The sync tool never overwrites Status on UPDATE &mdash; intentional to protect the Auto Status formula chain.</span></li>
+      <li><span class="rule-icon">&#x1F5C2;&#xFE0F;</span><span class="rule-text"><strong>Every project needs a &#x1F4C1; Projects DB entry.</strong> This is the anchor for Work Sessions. Without it, sessions cannot be assigned to a project.</span></li>
+      <li><span class="rule-icon">&#x1F517;</span><span class="rule-text"><strong>backlink_field must always be &ldquo;Master WBS&rdquo;.</strong> This relation column links Project WBS rows back to Master WBS Tasks entries. Auto-written by the tool on first sync.</span></li>
+      <li><span class="rule-icon">&#x1F9E9;</span><span class="rule-text"><strong>Config keys must be UUID-with-hyphens format.</strong> e.g. <code style="font-family:monospace;font-size:10px;background:var(--surface2);padding:1px 4px;border-radius:3px;color:var(--accent4)">001e7ca9-a7b8-4180-&hellip;</code>, not the compact form.</span></li>
+      <li><span class="rule-icon">&#x1F6AB;</span><span class="rule-text"><strong>Deleted source tasks are NOT removed from Master WBS.</strong> Preserves historical log integrity.</span></li>
+    </ul>
+    <div class="sec-label" style="margin-top:24px">Running the Tool</div>
+    <div class="card">
+      <div class="config-block">
+<span class="cfg-comment"># From the Notion_Auto_PM folder:</span><br>
+python3 notion_wbs_sync.py<br><br>
+<span class="cfg-comment"># Opens browser to:</span><br>
+http://localhost:8765<br><br>
+<span class="cfg-comment"># One-time install:</span><br>
+pip3 install flask requests
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Faculty PM System Design Doc &middot; v1.0 &middot; June 2026</div>
+</div>
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>"""
+
+
+WORKLOAD_HTML_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Workload Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #f5f5f4; color: #1c1917; min-height: 100vh; }
+
+  header { background: #fff; border-bottom: 1px solid #e7e5e4; padding: 14px 24px;
+           display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+
+  .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer;
+         font-size: 13px; font-weight: 500; transition: background .15s; }
+  .btn-primary   { background: #2563eb; color: #fff; }
+  .btn-primary:hover   { background: #1d4ed8; }
+  .btn-secondary { background: #e7e5e4; color: #1c1917; }
+  .btn-secondary:hover { background: #d6d3d1; }
+  .btn-range { padding: 5px 12px; border-radius: 6px; border: 1px solid #e7e5e4;
+               background: #fff; cursor: pointer; font-size: 13px; color: #57534e;
+               transition: all .15s; }
+  .btn-range.active, .btn-range:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .toolbar .label { font-size: 13px; color: #78716c; font-weight: 500; }
+  .custom-dates { display: none; align-items: center; gap: 6px; }
+  .custom-dates input { padding: 5px 8px; border: 1px solid #e7e5e4; border-radius: 6px;
+                        font-size: 13px; color: #1c1917; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+               padding: 16px 20px; }
+  .stat-card .val { font-size: 28px; font-weight: 700; color: #1c1917; line-height: 1; }
+  .stat-card .lbl { font-size: 12px; color: #78716c; margin-top: 4px; }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .chart-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px; padding: 16px 20px; }
+  .chart-card h3 { font-size: 13px; font-weight: 600; color: #57534e;
+                   text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bar-label { font-size: 12px; color: #1c1917; width: 140px; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .bar-track { flex: 1; background: #f5f5f4; border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px; background: #2563eb; transition: width .4s; }
+  .bar-fill-wt { background: #7c3aed; }
+  .bar-hrs   { font-size: 12px; color: #78716c; width: 42px; text-align: right; flex-shrink: 0; }
+  .empty-chart { font-size: 13px; color: #a8a29e; padding: 8px 0; }
+
+  .section-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+                  padding: 16px 20px; margin-bottom: 16px; }
+  .section-card h3 { font-size: 13px; font-weight: 600; color: #57534e;
+                     text-transform: uppercase; letter-spacing: .04em; margin-bottom: 14px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 0 10px 8px 0; color: #78716c; font-weight: 500;
+       font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+       border-bottom: 1px solid #e7e5e4; }
+  td { padding: 9px 10px 9px 0; border-bottom: 1px solid #f5f5f4; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .dur { font-weight: 600; color: #1c1917; }
+  .wt-badge { display: inline-block; padding: 2px 6px; border-radius: 4px;
+              font-size: 11px; font-weight: 500; }
+  .status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px;
+                  font-size: 11px; font-weight: 500; }
+  .status-completed { background: #dcfce7; color: #166534; }
+  .status-inprog    { background: #fef9c3; color: #854d0e; }
+  .status-other     { background: #f5f5f4; color: #57534e; }
+  .sess-name a { color: #1c1917; text-decoration: none; font-weight: 500; }
+  .sess-name a:hover { text-decoration: underline; }
+  .sess-proj { font-size: 11px; color: #78716c; margin-top: 2px; }
+
+  .p-urgent { background: #fee2e2; color: #dc2626; }
+  .p-high   { background: #ffedd5; color: #c2410c; }
+  .p-normal { background: #f5f5f4; color: #57534e; }
+  .p-low    { background: #f5f5f4; color: #a8a29e; }
+
+  .loading-inline { font-size: 13px; color: #78716c; padding: 12px 0; }
+  .error-box { color: #dc2626; font-size: 13px; padding: 12px 0; }
+  .all-clear  { text-align: center; padding: 40px 0; font-size: 24px; }
+  .all-clear p { font-size: 14px; color: #78716c; margin-top: 6px; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px;
+             border: 2px solid #e7e5e4; border-top-color: #2563eb;
+             border-radius: 50%; animation: spin .7s linear infinite;
+             vertical-align: middle; margin-right: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    .charts-row { grid-template-columns: 1fr; }
+    .stats-row  { grid-template-columns: repeat(3, 1fr); }
+    .bar-label  { width: 100px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Workload Dashboard</h1>
+  <a href="/focus"    class="btn btn-secondary" style="text-decoration:none;">📌 Focus</a>
+  <a href="/"         class="btn btn-secondary" style="text-decoration:none;">← Sync Tool</a>
+</header>
+
+<main>
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <span class="label">Range:</span>
+    <button class="btn-range" onclick="setMode('today')">Today</button>
+    <button class="btn-range active" id="btn-this_week" onclick="setMode('this_week')">This Week</button>
+    <button class="btn-range" onclick="setMode('last_week')">Last Week</button>
+    <button class="btn-range" onclick="setMode('this_month')">This Month</button>
+    <button class="btn-range" onclick="setMode('custom')">Custom…</button>
+    <div class="custom-dates" id="custom-dates">
+      <input type="date" id="start-date">
+      <span style="color:#78716c">to</span>
+      <input type="date" id="end-date">
+      <button class="btn btn-primary" onclick="load()">Go</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card"><div class="val" id="stat-hours">—</div><div class="lbl">Total Hours</div></div>
+    <div class="stat-card"><div class="val" id="stat-sessions">—</div><div class="lbl">Sessions</div></div>
+    <div class="stat-card"><div class="val" id="stat-projects">—</div><div class="lbl">Projects</div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>By Project</h3>
+      <div id="chart-project"><div class="loading-inline"><span class="spinner"></span> Loading…</div></div>
+    </div>
+    <div class="chart-card">
+      <h3>By Work Type</h3>
+      <div id="chart-worktype"><div class="loading-inline"><span class="spinner"></span> Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Sessions table -->
+  <div class="section-card">
+    <h3>Sessions</h3>
+    <div id="sessions-body"><div class="loading-inline"><span class="spinner"></span> Loading…</div></div>
+  </div>
+
+</main>
+
+<script>
+let currentMode = "this_week";
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll(".btn-range").forEach(b => b.classList.remove("active"));
+  const ids = {today:"btn-today", this_week:"btn-this_week",
+               last_week:"btn-last_week", this_month:"btn-this_month"};
+  if (ids[mode]) document.getElementById(ids[mode])?.classList.add("active");
+  document.getElementById("custom-dates").style.display = mode === "custom" ? "flex" : "none";
+  if (mode !== "custom") load();
+}
+
+function buildPayload() {
+  const p = {mode: currentMode};
+  if (currentMode === "custom") {
+    p.start_date = document.getElementById("start-date").value;
+    p.end_date   = document.getElementById("end-date").value;
+    if (!p.start_date || !p.end_date) return null;
+  }
+  return p;
+}
+
+function fmtHours(h) {
+  if (h == null) return "—";
+  const hrs = Math.floor(h), mins = Math.round((h - hrs) * 60);
+  return hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`) : `${mins}m`;
+}
+
+function fmtDT(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("en-US", {month:"short", day:"numeric",
+      hour:"numeric", minute:"2-digit", hour12:true});
+  } catch { return iso; }
+}
+
+function fmtDateOnly(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
+    return d.toLocaleDateString("en-US", {month:"short", day:"numeric"});
+  } catch { return iso; }
+}
+
+function renderBars(items, maxHours, fillClass) {
+  if (!items || items.length === 0) return '<div class="empty-chart">No data for this period.</div>';
+  return items.map(item => `
+    <div class="bar-row">
+      <div class="bar-label" title="${item.name}">${item.name}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${fillClass}" style="width:${maxHours ? (item.hours/maxHours*100).toFixed(1) : 0}%"></div>
+      </div>
+      <div class="bar-hrs">${fmtHours(item.hours)}</div>
+    </div>`).join("");
+}
+
+function statusClass(s) {
+  if (s === "Completed")  return "status-completed";
+  if (s === "In Progress") return "status-inprog";
+  return "status-other";
+}
+
+function renderSessions(sessions) {
+  if (!sessions || sessions.length === 0)
+    return '<div class="all-clear">📭<p>No sessions logged for this period.</p></div>';
+  const rows = sessions.map(s => `
+    <tr>
+      <td class="sess-name">
+        <a href="${s.url.replace("https://","notion://")}" >${s.name}</a>
+        <div class="sess-proj">${s.project}</div>
+      </td>
+      <td>${fmtDT(s.start)}</td>
+      <td>${s.end ? fmtDT(s.end) : '<span style="color:#a8a29e">in progress</span>'}</td>
+      <td class="dur">${fmtHours(s.duration)}</td>
+      <td>${s.work_type}</td>
+      <td><span class="status-badge ${statusClass(s.status)}">${s.status}</span></td>
+    </tr>`).join("");
+  return `<table>
+    <thead><tr>
+      <th>Session</th><th>Start</th><th>End</th>
+      <th>Duration</th><th>Work Type</th><th>Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function load() {
+  const payload = buildPayload();
+  if (!payload) return;
+
+  document.getElementById("chart-project").innerHTML   = '<div class="loading-inline"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("chart-worktype").innerHTML  = '<div class="loading-inline"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("sessions-body").innerHTML   = '<div class="loading-inline"><span class="spinner"></span> Loading…</div>';
+  document.getElementById("stat-hours").textContent    = "—";
+  document.getElementById("stat-sessions").textContent = "—";
+  document.getElementById("stat-projects").textContent = "—";
+
+  try {
+    const res  = await fetch("/api/workload", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error) { showErr(data.error); return; }
+
+    // Stats
+    document.getElementById("stat-hours").textContent    = fmtHours(data.total_hours);
+    document.getElementById("stat-sessions").textContent = data.session_count;
+    document.getElementById("stat-projects").textContent = data.project_count;
+
+    // Charts
+    const maxP  = data.by_project[0]?.hours  || 1;
+    const maxWT = data.by_work_type[0]?.hours || 1;
+    document.getElementById("chart-project").innerHTML  = renderBars(data.by_project,   maxP,  "");
+    document.getElementById("chart-worktype").innerHTML = renderBars(data.by_work_type, maxWT, "bar-fill-wt");
+
+    // Sessions
+    document.getElementById("sessions-body").innerHTML = renderSessions(data.sessions);
+  } catch(e) {
+    showErr(e.message);
+  }
+}
+
+function showErr(msg) {
+  const html = `<div class="error-box">⚠️ ${msg}</div>`;
+  document.getElementById("chart-project").innerHTML  = html;
+  document.getElementById("chart-worktype").innerHTML = html;
+  document.getElementById("sessions-body").innerHTML  = html;
+}
+
+// Add missing id attrs to range buttons on load
+document.addEventListener("DOMContentLoaded", () => {
+  const labels = ["today","this_week","last_week","this_month"];
+  document.querySelectorAll(".btn-range").forEach((b, i) => {
+    if (labels[i]) b.id = "btn-" + labels[i];
+  });
+  load();
+});
+</script>
+</body>
+</html>"""
 
 
 # ── Embedded HTML UI ──────────────────────────────────────────────────────────
@@ -1788,6 +3193,10 @@ HTML_PAGE = """<!DOCTYPE html>
     <h1>📋 Notion WBS Sync</h1>
     <div class="sub">Sync project WBS databases → Master WBS Tasks &amp; Work Sessions</div>
   </div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <a href="/workload" style="padding:7px 14px;border-radius:6px;background:#7c3aed;color:#fff;text-decoration:none;font-size:13px;font-weight:500;">📊 Workload</a>
+    <a href="/focus"    style="padding:7px 14px;border-radius:6px;background:#2563eb;color:#fff;text-decoration:none;font-size:13px;font-weight:500;">📌 Focus Tasks</a>
+  </div>
 </header>
 
 <div class="tabs">
@@ -1796,6 +3205,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <div class="tab" onclick="switchTab('sync')">▶️ Sync</div>
   <div class="tab" onclick="switchTab('quick')">⚡ Quick Start</div>
   <div class="tab" onclick="switchTab('help')">❓ Help</div>
+  <div class="tab" onclick="window.open('/design','_blank')">📐 Design Doc</div>
 </div>
 
 <!-- ── SETUP TAB ─────────────────────────────────────────────────────────── -->
@@ -1849,6 +3259,21 @@ HTML_PAGE = """<!DOCTYPE html>
 
 <!-- ── SYNC TAB ──────────────────────────────────────────────────────────── -->
 <div id="pane-sync" class="pane">
+
+  <div class="card" style="border-color:#c7d2fe;background:#eef2ff;">
+    <h3 style="color:#3730a3;">↩ Write-back Dates to Project WBS</h3>
+    <div class="hint" style="color:#4338ca;">
+      Reads the current Planned Start and Due Date from every task in Master WBS Tasks
+      and writes them back to the matching row in each Project WBS database.
+      Run this after rescheduling tasks in Master WBS so both tables stay in sync.
+    </div>
+    <div class="row" style="margin-top:0;">
+      <button class="btn" style="background:#4f46e5;color:#fff;" id="writeback-btn" onclick="runWriteback()">
+        ↩ Write-back Dates
+      </button>
+      <span id="writeback-status" style="font-size:13px;color:#666;"></span>
+    </div>
+  </div>
 
   <div class="card" style="border-color:#fde68a;background:#fffbeb;">
     <h3 style="color:#92400e;">🧹 Deduplicate Work Sessions</h3>
@@ -1975,12 +3400,35 @@ HTML_PAGE = """<!DOCTYPE html>
       <select id="qs-category" onchange="onQsCategoryChange()">
         <option value="">— loading… —</option>
       </select>
-      <!-- Shown when "➕ Add new category" is selected -->
       <input type="text" id="qs-category-new"
              placeholder="Type new category name…"
              style="display:none;margin-top:6px;font-size:13px;"
              oninput="this.value=this.value">
       <div class="field-hint">Categorise this task for time-tracking analysis. Type a new name to create a category on the fly.</div>
+    </div>
+
+    <!-- Service Level — shown when the WBS has a level field mapped (e.g. Professional Services) -->
+    <div class="field-group" id="qs-level-group" style="display:none;">
+      <label>Service Level <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-level" onchange="onQsLevelChange()">
+        <option value="">— loading… —</option>
+      </select>
+      <input type="text" id="qs-level-new"
+             placeholder="Type new level name…"
+             style="display:none;margin-top:6px;font-size:13px;">
+      <div class="field-hint">Select the service tier for this task.</div>
+    </div>
+
+    <!-- Organization / Division — shown when the WBS has an org_division field mapped -->
+    <div class="field-group" id="qs-orgdiv-group" style="display:none;">
+      <label>Organization / Division <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="qs-orgdiv" onchange="onQsOrgDivChange()">
+        <option value="">— loading… —</option>
+      </select>
+      <input type="text" id="qs-orgdiv-new"
+             placeholder="Type organization or division name…"
+             style="display:none;margin-top:6px;font-size:13px;">
+      <div class="field-hint">Select an existing org/division or type a new one.</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
@@ -2010,6 +3458,12 @@ HTML_PAGE = """<!DOCTYPE html>
         <option value="🟢 Communication">🟢 Communication</option>
       </select>
       <div class="field-hint">Sets Work Type on the Master WBS task so time-tracking by type is pre-filled.</div>
+    </div>
+
+    <div class="field-group">
+      <label>Due Date <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input type="date" id="qs-due-date" style="font-size:13px;">
+      <div class="field-hint">Written to both the Project WBS and Master WBS Tasks.</div>
     </div>
 
     <div class="field-group">
@@ -2426,13 +3880,15 @@ async function loadSchema(dbId) {
 }
 
 const MASTER_FIELDS = [
-  {key:"task_name",     label:"Task Name",              req:true},
-  {key:"priority",      label:"Priority",               req:false},
-  {key:"planned_start", label:"Planned Start",          req:false},
-  {key:"planned_end",   label:"Planned End / Due Date", req:false},
-  {key:"notes",         label:"Notes",                  req:false},
-  {key:"work_type",     label:"Work Type",              req:false},
+  {key:"task_name",     label:"Task Name",                req:true},
+  {key:"priority",      label:"Priority",                 req:false},
+  {key:"planned_start", label:"Planned Start",            req:false},
+  {key:"planned_end",   label:"Planned End / Due Date",   req:false},
+  {key:"notes",         label:"Notes",                    req:false},
+  {key:"work_type",     label:"Work Type",                req:false},
   {key:"category",      label:"Category / Phase / Group", req:false},
+  {key:"level",         label:"Service Level",            req:false},
+  {key:"org_division",  label:"Organization / Division",  req:false},
 ];
 
 function renderMapping(dbId, columns, savedMap) {
@@ -2835,6 +4291,29 @@ async function runDedup() {
   } else {
     setStatus("dedup-status", msg, totalArchived > 0 ? "green" : res.no_task_sessions > 0 ? "orange" : "green");
   }
+}
+
+async function runWriteback() {
+  if (!state.token) { alert("Set your token in the Setup tab first."); return; }
+  const btn = document.getElementById("writeback-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> Writing back…';
+  setStatus("writeback-status", "");
+
+  const res = await api("POST", "/api/writeback-dates", {token: state.token});
+
+  btn.disabled = false;
+  btn.innerHTML = "↩ Write-back Dates";
+
+  if (res.error) {
+    setStatus("writeback-status", "✗ " + res.error, "red");
+    return;
+  }
+  let msg = `✓ ${res.updated} task(s) updated`;
+  if (res.skipped) msg += ` · ${res.skipped} skipped (no mapping or field)`;
+  if (res.errors && res.errors.length)
+    msg += ` · ❌ ${res.errors.length} error(s): ${res.errors.slice(0,2).join("; ")}`;
+  setStatus("writeback-status", msg, res.errors?.length ? "orange" : "green");
 }
 
 // ── Quick Start tab ───────────────────────────────────────────────────────────

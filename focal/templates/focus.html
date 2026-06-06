@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📌 Focus Tasks</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f4;
+    color: #1c1917;
+    min-height: 100vh;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid #e7e5e4;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+  .meta { font-size: 12px; color: #78716c; }
+  .btn {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background .15s;
+  }
+  .btn-primary   { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-secondary { background: #e7e5e4; color: #1c1917; }
+  .btn-secondary:hover { background: #d6d3d1; }
+  .btn:disabled  { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+
+  .loading, .error-box {
+    text-align: center;
+    padding: 60px 20px;
+    color: #78716c;
+    font-size: 15px;
+  }
+  .error-box { color: #dc2626; }
+
+  .bucket { margin-bottom: 28px; }
+  .bucket-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .bucket-header h2 { font-size: 15px; font-weight: 600; }
+  .count-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: #e7e5e4;
+    color: #57534e;
+  }
+  .empty-msg { font-size: 14px; color: #78716c; padding: 12px 0; }
+
+  .task-card {
+    background: #fff;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .task-card:hover { border-color: #a8a29e; }
+  .priority-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .dot-urgent { background: #dc2626; }
+  .dot-high   { background: #f97316; }
+  .dot-normal { background: #3b82f6; }
+  .dot-low    { background: #a8a29e; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1c1917;
+    text-decoration: none;
+  }
+  .task-name:hover { text-decoration: underline; }
+  .task-meta {
+    font-size: 12px;
+    color: #78716c;
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .task-notes {
+    font-size: 12px;
+    color: #57534e;
+    margin-top: 5px;
+    font-style: italic;
+  }
+  .tag { padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #f5f5f4; color: #57534e; }
+  .tag-urgent { background: #fee2e2; color: #dc2626; }
+  .tag-high   { background: #ffedd5; color: #c2410c; }
+
+  .summary-bar {
+    background: #fff;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+    color: #57534e;
+  }
+  .summary-bar strong { color: #1c1917; }
+
+  .all-clear { text-align: center; padding: 60px 20px; font-size: 28px; }
+  .all-clear p { font-size: 15px; color: #78716c; margin-top: 8px; }
+
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid #e7e5e4;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📌 Focus Tasks</h1>
+  <span class="meta" id="meta-line">—</span>
+  <button class="btn btn-secondary" id="btn-rebuild" onclick="rebuildCache()"
+          title="Re-query Notion and rebuild the local task cache">🔄 Rebuild cache</button>
+  <button class="btn btn-primary"   id="btn-refresh" onclick="loadFocus()">Refresh</button>
+  <a href="/" class="btn btn-secondary" style="text-decoration:none;">← Focal</a>
+</header>
+
+<main id="main-content">
+  <div class="loading"><span class="spinner"></span> Loading focus tasks…</div>
+</main>
+
+<script>
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-US", {month:"short", day:"numeric"});
+}
+
+function priorityDot(p) {
+  const cls = {Urgent:"dot-urgent", High:"dot-high", Normal:"dot-normal", Low:"dot-low"}[p] || "dot-normal";
+  return `<div class="priority-dot ${cls}"></div>`;
+}
+
+function priorityTag(p) {
+  if (p === "Urgent") return `<span class="tag tag-urgent">Urgent</span>`;
+  if (p === "High")   return `<span class="tag tag-high">High</span>`;
+  return "";
+}
+
+function renderTask(t, showDue) {
+  const due   = showDue && t.planned_end ? ` · Due ${fmtDate(t.planned_end)}` : "";
+  const wt    = t.work_type ? ` · ${t.work_type}` : "";
+  const proj  = t.project_name ? `<span>${t.project_name}</span>` : "";
+  const ptag  = priorityTag(t.priority);
+  const notes = t.notes ? `<div class="task-notes">${t.notes}</div>` : "";
+  return `
+    <div class="task-card">
+      ${priorityDot(t.priority)}
+      <div class="task-body">
+        <a class="task-name" href="${t.url.replace('https://', 'notion://')}">${t.name}</a>
+        <div class="task-meta">${proj}${ptag}<span>${t.priority}${due}${wt}</span></div>
+        ${notes}
+      </div>
+    </div>`;
+}
+
+function renderBucket(label, emoji, tasks, showDue, weekEnd) {
+  const weekNote = label === "Due This Week" && weekEnd
+    ? ` <span style="font-weight:400;color:#78716c;font-size:13px;">through ${fmtDate(weekEnd)}</span>`
+    : "";
+  const emptyMsg = {
+    "Overdue":       "✅ Nothing overdue — great!",
+    "Due Today":     "📭 Nothing due today.",
+    "Due This Week": "📭 Nothing due in the next 7 days.",
+  }[label] || "";
+  const body = tasks.length === 0
+    ? `<div class="empty-msg">${emptyMsg}</div>`
+    : tasks.map(t => renderTask(t, showDue)).join("");
+  return `
+    <div class="bucket">
+      <div class="bucket-header">
+        <h2>${emoji} ${label}${weekNote}</h2>
+        <span class="count-badge">${tasks.length}</span>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function setButtons(loading) {
+  document.getElementById("btn-refresh").disabled = loading;
+  document.getElementById("btn-rebuild").disabled = loading;
+  document.getElementById("btn-refresh").innerHTML = loading
+    ? '<span class="spinner"></span>Loading…' : "Refresh";
+}
+
+async function loadFocus() {
+  setButtons(true);
+  const main = document.getElementById("main-content");
+  main.innerHTML = '<div class="loading"><span class="spinner"></span> Checking task statuses…</div>';
+  try {
+    const res  = await fetch("/api/focus-tasks", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+
+    const total  = data.overdue.length + data.due_today.length + data.this_week.length;
+    const all    = [...data.overdue, ...data.due_today, ...data.this_week];
+    const urgent = all.filter(t => t.priority === "Urgent").length;
+    const high   = all.filter(t => t.priority === "High").length;
+
+    const genAt = data.generated_at
+      ? new Date(data.generated_at).toLocaleString("en-US",
+          {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})
+      : "—";
+    document.getElementById("meta-line").textContent =
+      `Cache: ${genAt} · ${data.cache_task_count} tasks total`;
+
+    if (total === 0) {
+      main.innerHTML = `<div class="all-clear">🎉<p>No tasks due or overdue. Enjoy the breathing room!</p></div>`;
+      return;
+    }
+
+    const summary = `<div class="summary-bar">
+      <span>Needing attention: <strong>${total}</strong></span>
+      <span>🔴 Overdue: <strong>${data.overdue.length}</strong></span>
+      <span>🟡 Due today: <strong>${data.due_today.length}</strong></span>
+      <span>🔵 This week: <strong>${data.this_week.length}</strong></span>
+      ${urgent ? `<span>🚨 Urgent: <strong>${urgent}</strong></span>` : ""}
+      ${high   ? `<span>⚠️ High: <strong>${high}</strong></span>` : ""}
+    </div>`;
+
+    main.innerHTML = summary
+      + renderBucket("Overdue",       "🔴", data.overdue,   true,  null)
+      + renderBucket("Due Today",     "🟡", data.due_today, false, null)
+      + renderBucket("Due This Week", "🔵", data.this_week, true,  data.week_end);
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    setButtons(false);
+  }
+}
+
+async function rebuildCache() {
+  document.getElementById("btn-rebuild").innerHTML = '<span class="spinner"></span>Rebuilding…';
+  setButtons(true);
+  try {
+    const res  = await fetch("/api/regenerate-focus-cache", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    await loadFocus();
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    setButtons(false);
+  }
+}
+
+function showError(msg) {
+  document.getElementById("main-content").innerHTML =
+    `<div class="error-box">⚠️ ${msg}<br><br>
+     Make sure the sync tool has a valid Notion token configured.</div>`;
+  setButtons(false);
+}
+
+loadFocus();
+</script>
+</body>
+</html>
