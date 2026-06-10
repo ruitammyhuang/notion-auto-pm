@@ -10,6 +10,8 @@ so HTTP implementation details stay out of the sync logic.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from datetime import datetime, timedelta
 
@@ -101,9 +103,23 @@ def _get_project_id_from_page(page: dict) -> str | None:
 
 
 def _archive_page(client: NotionClient, page_id: str, errors: list) -> bool:
-    """Archive a Notion page; append to errors list on failure."""
+    """Archive a Notion page; append to errors list on failure.
+
+    Notion returns 400 when a page is already trashed/archived and 404 when it
+    has been hard-deleted.  Both mean the page is effectively gone, so we treat
+    them as success rather than surfacing a spurious error to the user.
+    """
     try:
         r = client.patch_page(page_id, {"archived": True})
+        if r.status_code in (404,):
+            return True   # hard-deleted — already gone
+        if r.status_code == 400:
+            try:
+                msg = (r.json().get("message") or "").lower()
+            except Exception:
+                msg = ""
+            if any(k in msg for k in ("archived", "trash", "deleted", "can only update")):
+                return True   # already in trash — mission accomplished
         r.raise_for_status()
         return True
     except Exception as e:
@@ -152,17 +168,28 @@ def regenerate_focus_cache(client: NotionClient) -> None:
                 f"https://app.notion.com/p/{r['id'].replace('-', '')}"
                 for r in props.get("Work Sessions", {}).get("relation", [])
             ]
+            # Read rollup counts directly from the page response — no extra API calls.
+            # Completed Sessions = count of sessions with Status "Completed" (rollup: sum)
+            # Total Sessions     = count of all linked Work Sessions (rollup: count_values)
+            completed_sessions = (
+                props.get("Completed Sessions", {}).get("rollup", {}).get("number") or 0
+            )
+            total_sessions = (
+                props.get("Total Sessions", {}).get("rollup", {}).get("number") or 0
+            )
             pid_clean = page["id"].replace("-", "")
             tasks.append({
-                "id":            page["id"],
-                "url":           f"https://app.notion.com/p/{pid_clean}",
-                "name":          extract(props.get("Task Name", {})) or "",
-                "planned_end":   planned_end,
-                "priority":      extract(props.get("Priority", {})) or "Normal",
-                "work_type":     extract(props.get("Work Type", {})) or "",
-                "project_name":  project_names.get(proj_id, ""),
-                "notes":         extract(props.get("Notes", {})) or "",
-                "work_sessions": ws_urls,
+                "id":                  page["id"],
+                "url":                 f"https://app.notion.com/p/{pid_clean}",
+                "name":                extract(props.get("Task Name", {})) or "",
+                "planned_end":         planned_end,
+                "priority":            extract(props.get("Priority", {})) or "Normal",
+                "work_type":           extract(props.get("Work Type", {})) or "",
+                "project_name":        project_names.get(proj_id, ""),
+                "notes":               extract(props.get("Notes", {})) or "",
+                "work_sessions":       ws_urls,
+                "completed_sessions":  int(completed_sessions),
+                "total_sessions":      int(total_sessions),
             })
 
         tasks.sort(key=lambda t: t["planned_end"])
@@ -179,38 +206,95 @@ def regenerate_focus_cache(client: NotionClient) -> None:
 
 
 # ── Orphaned mapping cleanup ───────────────────────────────────────────────────
-def cleanup_orphaned_mappings(
-    client: NotionClient,
+def find_orphaned_candidates(
     all_current_src_ids: set,
+    mappings: dict,
+    synced_db_ids: set = None,
+    source_labels: dict = None,
+) -> list[dict]:
+    """Identify mapping entries whose source WBS page no longer exists.
+
+    Returns a list of dicts with metadata for each candidate, without
+    modifying any state — the caller decides whether to proceed.
+    Each dict has: sid, master_id, db, db_title, task_name.
+
+    synced_db_ids scoping: only entries whose 'db' is in synced_db_ids (or
+    has no db tag) are candidates. Pass None to consider all.
+    """
+    source_labels = source_labels or {}
+    candidates = []
+    for sid, v in mappings.items():
+        if not isinstance(v, dict):
+            continue
+        if v.get("deleted"):                        # skip tombstones
+            continue
+        if sid in all_current_src_ids:              # still exists
+            continue
+        db = v.get("db")
+        if db is not None and synced_db_ids is not None and db not in synced_db_ids:
+            continue                                # different sync scope
+        candidates.append({
+            "sid":       sid,
+            "master_id": v.get("master_id", ""),
+            "db":        db or "",
+            "db_title":  source_labels.get(db, db or "unknown"),
+            "task_name": v.get("task_name") or v.get("fp") or sid[:8] + "…",
+        })
+    return candidates
+
+
+def delete_orphaned_candidates(
+    client: NotionClient,
+    candidates: list[dict],
     mappings: dict,
     sessions_mappings: dict,
 ) -> int:
-    """Remove mapping entries whose source WBS page no longer exists anywhere.
-    Targets legacy entries with db=None that per-database stale detection misses.
-    Returns: number of orphaned entries cleaned up."""
-    orphaned = [
-        sid for sid, v in mappings.items()
-        if isinstance(v, dict) and v.get("db") is None
-        and sid not in all_current_src_ids
-    ]
+    """Archive Notion pages and remove mapping entries for the given candidates.
+
+    Call this only after the user has confirmed deletion.
+    Returns the number of entries cleaned up."""
     cleaned = 0
-    for sid in orphaned:
-        master_id = mappings[sid]["master_id"]
+    for item in candidates:
+        sid       = item["sid"]
+        master_id = item["master_id"]
         try:
             client.patch_page(master_id, {"archived": True})
         except Exception:
             pass
         if sessions_mappings and master_id in sessions_mappings:
             ws_id = sessions_mappings[master_id]
+            # Preserve work sessions with logged hours — historical time data
+            # should survive even when the source task is deleted.
             if not has_logged_hours(client, ws_id):
                 try:
                     client.patch_page(ws_id, {"archived": True})
                 except Exception:
                     pass
             del sessions_mappings[master_id]
-        del mappings[sid]
+        if sid in mappings:
+            del mappings[sid]
         cleaned += 1
     return cleaned
+
+
+def cleanup_orphaned_mappings(
+    client: NotionClient,
+    all_current_src_ids: set,
+    mappings: dict,
+    sessions_mappings: dict,
+    synced_db_ids: set = None,
+) -> int:
+    """Find and immediately delete orphaned mapping entries.
+
+    Convenience wrapper kept for backward compatibility. For interactive
+    flows that need user confirmation, use find_orphaned_candidates() +
+    delete_orphaned_candidates() separately.
+
+    Returns: number of entries cleaned up."""
+    candidates = find_orphaned_candidates(
+        all_current_src_ids, mappings, synced_db_ids
+    )
+    return delete_orphaned_candidates(client, candidates, mappings, sessions_mappings)
 
 
 # ── Work Sessions sync ─────────────────────────────────────────────────────────
@@ -296,6 +380,30 @@ def sync_work_sessions_for_project(
     return {"created": created, "skipped": skipped, "errors": errors}
 
 
+# ── Change-detection fingerprint ──────────────────────────────────────────────
+def _field_fingerprint(
+    task_name: str | None,
+    priority: str | None,
+    work_type: str | None,
+    category_val: str | None,
+    notes: str | None,
+    planned_start: str | None,
+    planned_end: str | None,
+) -> str:
+    """Stable MD5 fingerprint of source-derived field values.
+    Used by sync_one_database to skip no-op PATCH calls when nothing changed."""
+    data = {
+        "n": task_name or "",
+        "p": priority or "",
+        "w": work_type or "",
+        "c": category_val or "",
+        "t": notes or "",
+        "s": planned_start or "",
+        "e": planned_end or "",
+    }
+    return hashlib.md5(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
 # ── Core sync ──────────────────────────────────────────────────────────────────
 def sync_one_database(
     client: NotionClient,
@@ -345,6 +453,8 @@ def sync_one_database(
             pass
         if sessions_mappings and master_id in sessions_mappings:
             ws_id = sessions_mappings[master_id]
+            # Preserve work sessions that have logged hours — the historical
+            # time record should survive even if the source task was deleted.
             if not has_logged_hours(client, ws_id):
                 try:
                     client.patch_page(ws_id, {"archived": True})
@@ -423,6 +533,16 @@ def sync_one_database(
 
         notes = get_field("notes")
 
+        # ── Tombstone check ───────────────────────────────────────────────────
+        # If this source task's master was intentionally deleted/trashed, skip
+        # it permanently — do not recreate the master page.
+        if mappings.get(src_id, {}).get("deleted"):
+            skipped += 1
+            if emit:
+                emit({"type": "task", "task": task_name, "action": "skipped"})
+            continue
+        # ─────────────────────────────────────────────────────────────────────
+
         master_props = {
             "Task Name": p_title(task_name),
             "Project":   {"relation": [{"id": project_page_id}]},
@@ -439,33 +559,65 @@ def sync_one_database(
                 master_id = mappings[src_id]["master_id"]
                 mappings[src_id]["db"] = source_db_id  # tag legacy entries
 
+                # ── Change detection ───────────────────────────────────────────
+                # Only PATCH if the source values actually differ from the last
+                # sync. Without this check every task is "updated" on every run.
+                new_fp = _field_fingerprint(
+                    task_name, priority, work_type, category_val,
+                    notes, planned_start, planned_end,
+                )
+                if mappings[src_id].get("fp") == new_fp:
+                    skipped += 1
+                    if emit:
+                        emit({"type": "task", "task": task_name, "action": "skipped"})
+                    continue
+                # ──────────────────────────────────────────────────────────────
+
                 r = _with_retry(
                     client.patch_page,
                     master_id,
                     {"properties": master_props},
                 )
-                if r.status_code == 404:
-                    # Master page deleted out-of-band — recreate it
-                    del mappings[src_id]
-                    new_page = _with_retry(
-                        client.create_page,
-                        {"database_id": MASTER_DB_ID},
-                        master_props,
-                    )
-                    new_id = new_page["id"]
-                    mappings[src_id] = {"master_id": new_id, "db": source_db_id}
-                    client.write_backlink(src_id, new_id, backlink_field)
-                    new_tasks.append({"master_id": new_id,
-                                      "project_id": project_page_id,
-                                      "task_name": task_name})
-                    created += 1
-                    if emit:
-                        emit({"type": "task", "task": task_name, "action": "created"})
-                else:
-                    r.raise_for_status()
-                    client.write_backlink(src_id, master_id, backlink_field)
-                    # Propagate rename to Work Session's Session Name
+                # Notion returns 404 for hard-deleted pages and 400 for
+                # trashed/archived pages — both mean "recreate the master entry".
+                _page_gone = r.status_code == 404
+                if r.status_code == 400:
+                    try:
+                        _body_msg = (r.json().get("message") or "").lower()
+                        if any(k in _body_msg for k in (
+                                "archived", "trash", "deleted", "can only update")):
+                            _page_gone = True
+                    except Exception:
+                        pass
+
+                if _page_gone:
+                    # Master page was intentionally trashed — tombstone this
+                    # mapping so it is never recreated. Also archive any linked
+                    # Work Session to keep the sessions DB clean.
+                    mappings[src_id]["deleted"] = True
                     if sessions_mappings and master_id in sessions_mappings:
+                        ws_id = sessions_mappings[master_id]
+                        _archive_page(client, ws_id, errors)
+                        del sessions_mappings[master_id]
+                    deleted += 1
+                    if emit:
+                        emit({"type": "task", "task": task_name, "action": "deleted"})
+                else:
+                    # Raise with body text so 400 errors are easy to diagnose
+                    if not r.ok:
+                        try:
+                            detail = r.json().get("message", r.text[:200])
+                        except Exception:
+                            detail = r.text[:200]
+                        raise requests.HTTPError(
+                            f"{r.status_code} {r.reason} — {detail} — url: {r.url}",
+                            response=r,
+                        )
+                    client.write_backlink(src_id, master_id, backlink_field)
+                    # Propagate rename to Work Session only if task name changed
+                    prev_name = mappings[src_id].get("task_name", "")
+                    if (sessions_mappings and master_id in sessions_mappings
+                            and task_name != prev_name):
                         ws_id = sessions_mappings[master_id]
                         try:
                             client.patch_page(
@@ -474,6 +626,8 @@ def sync_one_database(
                             )
                         except Exception:
                             pass
+                    mappings[src_id]["fp"] = new_fp
+                    mappings[src_id]["task_name"] = task_name
                     updated += 1
                     if emit:
                         emit({"type": "task", "task": task_name, "action": "updated"})

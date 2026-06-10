@@ -205,16 +205,27 @@ class NotionClient:
         source_page_id: str,
         master_page_id: str,
         backlink_field: str,
-    ) -> None:
-        """Write Master WBS relation back to the source WBS page. Idempotent."""
+    ) -> bool:
+        """Write Master WBS relation back to the source WBS page. Idempotent.
+        Returns True on success, False on failure (non-fatal — mapping file still tracks the link)."""
         if not backlink_field:
-            return
+            return True
         try:
-            self.patch_page(
+            r = self.patch_page(
                 source_page_id,
                 {"properties": {
                     backlink_field: {"relation": [{"id": master_page_id}]}
                 }},
             )
-        except Exception:
-            pass  # non-fatal — mapping file still tracks the link
+            if not r.ok:
+                import logging
+                logging.warning(
+                    "write_backlink failed for %s → %s: %s %s",
+                    source_page_id, master_page_id, r.status_code, r.text[:200],
+                )
+                return False
+            return True
+        except Exception as exc:
+            import logging
+            logging.warning("write_backlink exception for %s: %s", source_page_id, exc)
+            return False

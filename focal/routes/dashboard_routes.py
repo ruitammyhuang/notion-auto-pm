@@ -80,26 +80,38 @@ def api_focus_tasks():
     client = NotionClient(token)
 
     def is_completed(task: dict) -> bool:
+        # Fast path: use rollup counts stored in the cache.
+        # If total_sessions > 0 and all sessions are completed, the task is done.
+        total     = task.get("total_sessions", 0)
+        completed = task.get("completed_sessions", 0)
+        if total > 0:
+            return completed >= total
+
+        # Fallback: for tasks whose rollup counts weren't cached (e.g. old cache
+        # entries), fetch each Work Session page and check Status directly.
         ws_urls = task.get("work_sessions", [])
         if not ws_urls:
             return False
+        active_count = 0
         for url in ws_urls:
             page_id = url.rstrip("/").split("/")[-1].replace("-", "")
             if len(page_id) == 32:
                 page_id = f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
             try:
-                r    = client.get_page(page_id)
+                r = client.get_page(page_id)
                 if not r.ok:
-                    return False
+                    continue   # skip unreachable sessions rather than aborting
                 data = r.json()
                 if data.get("archived") or data.get("in_trash"):
                     continue
+                active_count += 1
                 status = extract(data.get("properties", {}).get("Status", {}))
                 if status != "Completed":
                     return False
             except Exception:
-                return False
-        return True
+                continue       # skip on error; don't suppress a completed task
+        # All fetched active sessions were Completed (and at least one existed)
+        return active_count > 0
 
     priority_order = {"Urgent": 0, "High": 1, "Normal": 2, "Low": 3}
 
@@ -239,6 +251,19 @@ def api_workload():
 
         dur_formula = props.get("Duration", {}).get("formula", {})
         duration    = dur_formula.get("number") if dur_formula.get("type") == "number" else None
+
+        # Fallback: compute from start/end timestamps when formula is null
+        if duration is None and sess_start and sess_end:
+            try:
+                def _parse_iso(s: str):
+                    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+                dt_s = _parse_iso(sess_start)
+                dt_e = _parse_iso(sess_end)
+                diff = (dt_e - dt_s).total_seconds()
+                if diff > 0:
+                    duration = diff / 3600.0
+            except Exception:
+                pass
 
         work_type = extract(props.get("Work Type", {})) or "Unclassified"
         status    = extract(props.get("Status", {})) or "—"

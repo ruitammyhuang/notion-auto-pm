@@ -116,8 +116,6 @@ Title: WBS — [Project Name]
 | Property | Type | Notes |
 |----------|------|-------|
 | Task | title | Required |
-| Status | select | Options: Not Started, In Progress, Completed, Blocked, On Hold |
-| Auto Status | formula or rollup | Set up manually; auto-driven by Work Sessions |
 | Priority | select | Options: Urgent, High, Normal, Low |
 | Planned Start | date | |
 | Due Date | date | |
@@ -125,13 +123,29 @@ Title: WBS — [Project Name]
 | Notes | rich_text | |
 | Master WBS | relation | Relates to Master WBS Tasks DB (`2de3b2f3d9b74481bc88511ea94de45e`) |
 
+**Do NOT include `Status` or `Auto Status` in the CREATE TABLE statement.** Auto Status is a rollup that must be added after the database exists (see Step 4b below).
+
 **Project-specific additions:**
 - Teaching/course projects: add `Module` (select) for grouping by module
 - Program Management: add `Category` (select) for reactive task types
 - Professional Services: add `Level` (select) and `Organization / Division` (rich_text)
 - Research: add `Phase` (select: Literature Review, Data Collection, Analysis, Writing, etc.)
 
-**Save the returned database ID** — this is `wbs_db_id` and `wbs_collection_id`.
+**Save the returned database ID and collection ID** — these are `wbs_db_id` and `wbs_collection_id`.
+
+---
+
+## Step 4b: Add Auto Status rollup
+
+Immediately after Step 4, call `notion-update-data-source` to add the Auto Status rollup:
+
+```
+Tool: notion-update-data-source
+Data source: wbs_collection_id
+Statements: ADD COLUMN "Auto Status" ROLLUP('Master WBS', 'Auto Status', 'show_original')
+```
+
+This wires Auto Status to the formula in Master WBS Tasks and requires no manual setup.
 
 ---
 
@@ -254,3 +268,4 @@ Use these when you need to reference existing projects in the sync config or Wor
 | Beyond the LXD Label Scoping Review | `36e54686-ae15-814f-a1d7-db14785cd5fc` |
 | CS Ed EdD Cohort 2 Summer Workshop 2026 | `37454686-ae15-819e-83b7-daaba02d7a51` |
 | Program Management | `37454686-ae15-817f-a40d-cf340a0dc0b2` |
+| Dissertation Mentoring | `37754686-ae15-81c7-8715-f86452b3fb9f` |

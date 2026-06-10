@@ -25,14 +25,22 @@ from ..notion_client import NotionClient
 from ..sync_engine import (
     sync_one_database,
     sync_work_sessions_for_project,
-    cleanup_orphaned_mappings,
+    find_orphaned_candidates,
+    delete_orphaned_candidates,
 )
 from ..log_writer import write_sync_log
 
 bp = Blueprint("sync", __name__)
 
-# In-memory job store: job_id → {events, done, result, error}
+# In-memory job store:
+# job_id → {events, done, result, error, cancel_requested,
+#            confirm_event (threading.Event), confirm_action}
 _sync_jobs: dict[str, dict] = {}
+
+
+def _is_cancelled(job_id: str | None) -> bool:
+    """Return True if the user has requested a stop."""
+    return bool(job_id and _sync_jobs.get(job_id, {}).get("cancel_requested"))
 
 
 def _run_full_sync(token: str, sources: list, job_id: str | None = None) -> dict:
@@ -59,6 +67,12 @@ def _run_full_sync(token: str, sources: list, job_id: str | None = None) -> dict
     # Phase 1: Project WBS → Master WBS Tasks
     all_current_src_ids: set = set()
     for db_n, src in enumerate(sources, 1):
+        if _is_cancelled(job_id):
+            emit({"type": "cancelled"})
+            save_mappings(mappings)
+            save_sessions_mappings(sessions_mappings)
+            return total
+
         db_title = source_labels[src["db_id"]]
         emit({"type": "db_start", "db": db_title,
               "db_n": db_n, "total_dbs": len(sources)})
@@ -102,12 +116,42 @@ def _run_full_sync(token: str, sources: list, job_id: str | None = None) -> dict
             emit({"type": "db_done", "db": db_title, "created": 0, "updated": 0,
                   "skipped": 0, "deleted": 0, "errors": 1, "fatal": str(e)})
 
-    # Clean up legacy db=None orphans
-    orphans = cleanup_orphaned_mappings(
-        client, all_current_src_ids, mappings, sessions_mappings)
-    if orphans:
-        total["deleted"] += orphans
-        emit({"type": "orphans_cleaned", "count": orphans})
+    # ── Orphan detection — ask user before deleting ───────────────────────────
+    synced_db_ids = {src["db_id"] for src in sources}
+    candidates = find_orphaned_candidates(
+        all_current_src_ids, mappings, synced_db_ids, source_labels
+    )
+
+    if candidates and not _is_cancelled(job_id):
+        # Emit the list so the UI can show a confirmation dialog
+        emit({
+            "type":  "pending_deletions",
+            "count": len(candidates),
+            "items": [
+                {
+                    "task_name": c["task_name"],
+                    "db_title":  c["db_title"],
+                    "master_id": c["master_id"],
+                }
+                for c in candidates
+            ],
+        })
+
+        # Block until the user confirms or cancels (5-minute timeout → auto-skip)
+        confirmed = False
+        if job_id and job_id in _sync_jobs:
+            evt = _sync_jobs[job_id]["confirm_event"]
+            evt.wait(timeout=300)
+            confirmed = _sync_jobs[job_id].get("confirm_action") == "confirm"
+
+        if confirmed and not _is_cancelled(job_id):
+            deleted = delete_orphaned_candidates(
+                client, candidates, mappings, sessions_mappings
+            )
+            total["deleted"] += deleted
+            emit({"type": "orphans_cleaned", "count": deleted})
+        else:
+            emit({"type": "deletion_skipped", "count": len(candidates)})
 
     save_mappings(mappings)
 
@@ -177,7 +221,15 @@ def api_sync_start():
         return jsonify({"error": "No sources selected"}), 400
 
     job_id = uuid.uuid4().hex[:12]
-    _sync_jobs[job_id] = {"events": [], "done": False, "result": None, "error": None}
+    _sync_jobs[job_id] = {
+        "events":           [],
+        "done":             False,
+        "result":           None,
+        "error":            None,
+        "cancel_requested": False,
+        "confirm_event":    threading.Event(),
+        "confirm_action":   None,    # set to "confirm" or "cancel" by user
+    }
 
     def run() -> None:
         try:
@@ -206,6 +258,33 @@ def api_sync_status(job_id: str):
         "result": job["result"],
         "error":  job["error"],
     })
+
+
+@bp.route("/api/sync-confirm/<job_id>", methods=["POST"])
+def api_sync_confirm(job_id: str):
+    """Respond to a pending_deletions prompt.
+    POST body: {"action": "confirm"} to proceed, {"action": "cancel"} to skip."""
+    job = _sync_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown job_id"}), 404
+    action = (request.json or {}).get("action", "cancel")
+    job["confirm_action"] = action
+    job["confirm_event"].set()
+    return jsonify({"ok": True, "action": action})
+
+
+@bp.route("/api/sync-cancel/<job_id>", methods=["POST"])
+def api_sync_cancel(job_id: str):
+    """Request the running sync to stop at the next safe checkpoint."""
+    job = _sync_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown job_id"}), 404
+    job["cancel_requested"] = True
+    # Also unblock any pending deletion prompt
+    if not job["confirm_event"].is_set():
+        job["confirm_action"] = "cancel"
+        job["confirm_event"].set()
+    return jsonify({"ok": True})
 
 
 @bp.route("/api/sync-work-sessions", methods=["POST"])

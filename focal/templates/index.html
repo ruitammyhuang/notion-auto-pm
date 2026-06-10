@@ -281,7 +281,7 @@
   <div class="tab active" onclick="switchTab('setup')">⚙️ Setup</div>
   <div class="tab" onclick="switchTab('sources')">🗂 Sources</div>
   <div class="tab" onclick="switchTab('sync')">▶️ Sync</div>
-  <div class="tab" onclick="switchTab('quick')">⚡ Quick Start</div>
+  <div class="tab" onclick="switchTab('quick')">⚡ Work Session Tasks</div>
   <div class="tab" onclick="switchTab('help')">❓ Help</div>
   <div class="tab" onclick="window.open('/design','_blank')">📐 Design Doc</div>
 </div>
@@ -384,9 +384,15 @@
       <button class="btn btn-ghost" onclick="selectAllSync(false)" style="font-size:12px;padding:5px 10px;">☐ Unselect All</button>
     </div>
     <div id="sync-source-list" style="margin-bottom:14px;"></div>
-    <button class="btn btn-primary" id="sync-btn" onclick="runSync()" style="min-width:130px;">
-      ▶ Sync Now
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-primary" id="sync-btn" onclick="runSync()" style="min-width:130px;">
+        ▶ Sync Now
+      </button>
+      <button class="btn btn-ghost" id="stop-btn" onclick="stopSync()"
+              style="display:none;min-width:110px;color:#e53e3e;border-color:#e53e3e;">
+        ⏹ Stop Sync
+      </button>
+    </div>
 
     <!-- Live progress panel — shown while sync is running -->
     <div id="sync-progress" style="display:none;margin-top:18px;">
@@ -399,6 +405,32 @@
       </div>
       <div id="sync-current-task" style="font-size:12px;color:#718096;margin-bottom:10px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;"></div>
       <div id="sync-log" style="background:#1a202c;border-radius:6px;padding:8px 10px;font-size:11px;font-family:monospace;max-height:180px;overflow-y:auto;color:#e2e8f0;line-height:1.7;"></div>
+    </div>
+
+    <!-- Deletion confirmation panel — shown when orphans are detected -->
+    <div id="delete-confirm-panel" style="display:none;margin-top:14px;border:2px solid #e53e3e;border-radius:8px;padding:14px 16px;background:#fff5f5;">
+      <div style="font-weight:700;color:#c53030;margin-bottom:6px;font-size:14px;">
+        ⚠️ Confirm Deletion
+      </div>
+      <div style="font-size:13px;color:#4a5568;margin-bottom:10px;">
+        The following tasks no longer exist in the source WBS and will be removed from
+        Master WBS Tasks. Review and confirm or skip:
+      </div>
+      <div id="delete-items-list"
+           style="background:#fff;border:1px solid #fed7d7;border-radius:6px;padding:8px 10px;
+                  max-height:200px;overflow-y:auto;font-size:12px;font-family:monospace;
+                  margin-bottom:12px;color:#2d3748;line-height:1.8;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" id="confirm-delete-btn"
+                onclick="respondDeletion('confirm')"
+                style="background:#e53e3e;border-color:#e53e3e;min-width:130px;">
+          🗑 Delete All
+        </button>
+        <button class="btn btn-ghost" onclick="respondDeletion('cancel')"
+                style="min-width:130px;">
+          Skip Deletion
+        </button>
+      </div>
     </div>
   </div>
 
@@ -461,7 +493,7 @@
 <!-- ── QUICK START TAB ──────────────────────────────────────────────────── -->
 <div id="pane-quick" class="pane">
   <div class="card">
-    <h3>⚡ Quick Start a Task</h3>
+    <h3>Add Task &amp; Start Session</h3>
     <div class="hint">
       Add a new task to a project and begin a Work Session in one click.
       The task is created in the Project WBS, Master WBS Tasks, and Work Sessions simultaneously.
@@ -545,12 +577,6 @@
         <option value="🟢 Communication">🟢 Communication</option>
       </select>
       <div class="field-hint">Sets Work Type on the Master WBS task so time-tracking by type is pre-filled.</div>
-    </div>
-
-    <div class="field-group">
-      <label>Due Date <span style="font-weight:400;color:#888;">(optional)</span></label>
-      <input type="date" id="qs-due-date" style="font-size:13px;">
-      <div class="field-hint">Written to both the Project WBS and Master WBS Tasks.</div>
     </div>
 
     <div class="field-group">
@@ -1215,6 +1241,7 @@ function buildSourcesList() {
 
 // ── Sync progress helpers ─────────────────────────────────────────────────────
 let _syncState = {};
+let _currentJobId = null;
 
 function _syncLog(text, color) {
   const log = document.getElementById("sync-log");
@@ -1224,6 +1251,32 @@ function _syncLog(text, color) {
   log.appendChild(line);
   while (log.children.length > 300) log.removeChild(log.firstChild);
   log.scrollTop = log.scrollHeight;
+}
+
+function _syncSetRunning(running) {
+  const syncBtn = document.getElementById("sync-btn");
+  const stopBtn = document.getElementById("stop-btn");
+  syncBtn.disabled  = running;
+  syncBtn.innerHTML = running ? '<span class="spinner"></span> Syncing…' : "▶ Sync Now";
+  stopBtn.style.display = running ? "inline-flex" : "none";
+}
+
+async function stopSync() {
+  if (!_currentJobId) return;
+  document.getElementById("stop-btn").disabled = true;
+  document.getElementById("stop-btn").textContent = "Stopping…";
+  await api("POST", `/api/sync-cancel/${_currentJobId}`, {});
+}
+
+async function respondDeletion(action) {
+  if (!_currentJobId) return;
+  document.getElementById("delete-confirm-panel").style.display = "none";
+  document.getElementById("confirm-delete-btn").disabled = true;
+  _syncLog(
+    action === "confirm" ? "🗑 Deletion confirmed — removing tasks…" : "⏭ Deletion skipped",
+    action === "confirm" ? "#f6ad55" : "#90cdf4"
+  );
+  await api("POST", `/api/sync-confirm/${_currentJobId}`, {action});
 }
 
 function _syncHandleEvent(evt) {
@@ -1273,6 +1326,32 @@ function _syncHandleEvent(evt) {
       _syncLog(parts.join(" · "), "#9ae6b4");
       break;
     }
+
+    case "pending_deletions": {
+      // Pause sync — show confirmation panel
+      phaseEl.textContent = `⚠️ Confirm deletion of ${evt.count} task(s)`;
+      const panel = document.getElementById("delete-confirm-panel");
+      const list  = document.getElementById("delete-items-list");
+      document.getElementById("confirm-delete-btn").disabled = false;
+      list.innerHTML = (evt.items || []).map(item =>
+        `<div style="padding:2px 0;border-bottom:1px solid #fed7d7;">` +
+        `<span style="color:#e53e3e;font-weight:600;">[${escHtml(item.db_title)}]</span> ` +
+        escHtml(item.task_name) +
+        `</div>`
+      ).join("");
+      panel.style.display = "block";
+      _syncLog(`⚠️ ${evt.count} task(s) pending deletion — waiting for confirmation`, "#f6ad55");
+      break;
+    }
+
+    case "orphans_cleaned":
+      _syncLog(`🗑 ${evt.count} orphaned task(s) deleted`, "#f6ad55");
+      break;
+
+    case "deletion_skipped":
+      _syncLog(`⏭ Deletion of ${evt.count} task(s) skipped`, "#90cdf4");
+      break;
+
     case "phase2_start":
       phaseEl.textContent   = `Phase 2 of 2 — Work Sessions`;
       bar.style.width       = "0%";
@@ -1298,6 +1377,13 @@ function _syncHandleEvent(evt) {
       curEl.textContent     = "";
       phaseEl.textContent   = "✓ Sync complete";
       _syncLog("✅ Done", "#68d391");
+      document.getElementById("delete-confirm-panel").style.display = "none";
+      break;
+
+    case "cancelled":
+      phaseEl.textContent = "⏹ Sync stopped";
+      _syncLog("⏹ Sync stopped by user", "#f6ad55");
+      document.getElementById("delete-confirm-panel").style.display = "none";
       break;
 
     case "error":
@@ -1312,10 +1398,8 @@ async function runSync() {
   const sources = buildSourcesList();
   if (!sources.length) { alert("Select at least one source database to sync."); return; }
 
-  const btn = document.getElementById("sync-btn");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Syncing…';
   document.getElementById("result-box").classList.remove("show");
+  document.getElementById("delete-confirm-panel").style.display = "none";
 
   // Reset and show progress panel
   const prog = document.getElementById("sync-progress");
@@ -1326,19 +1410,22 @@ async function runSync() {
   document.getElementById("sync-task-counter").textContent = "";
   document.getElementById("sync-current-task").textContent = "";
 
+  _syncSetRunning(true);
+
   // Start job
   let jobId;
   try {
     const startRes = await api("POST", "/api/sync-start", {token: state.token, sources});
     if (startRes.error) {
       document.getElementById("sync-phase-label").textContent = "✗ " + startRes.error;
-      btn.disabled = false; btn.innerHTML = "▶ Sync Now";
+      _syncSetRunning(false);
       return;
     }
     jobId = startRes.job_id;
+    _currentJobId = jobId;
   } catch(e) {
     document.getElementById("sync-phase-label").textContent = "✗ Could not start sync";
-    btn.disabled = false; btn.innerHTML = "▶ Sync Now";
+    _syncSetRunning(false);
     return;
   }
 
@@ -1360,14 +1447,11 @@ async function runSync() {
     if (status.done) { finalResult = status.result; break; }
   }
 
-  btn.disabled = false;
-  btn.innerHTML = "▶ Sync Now";
+  _currentJobId = null;
+  _syncSetRunning(false);
 
   if (!finalResult) return;
   const res = finalResult;
-
-  btn.disabled = false;
-  btn.innerHTML = "▶ Sync Now";
 
   document.getElementById("r-created").textContent      = res.created    ?? "—";
   document.getElementById("r-updated").textContent      = res.updated    ?? "—";

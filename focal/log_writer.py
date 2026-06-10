@@ -13,15 +13,16 @@ from .config import BASE_DIR
 
 
 def write_sync_log(total: dict) -> str | None:
-    """Write a timestamped log when there are errors or skipped records.
-    Returns the log file path, or None if the run was clean."""
+    """Write a timestamped log for every sync run.
+    Returns the log file path."""
     errors        = total.get("errors", [])
     skipped_tasks = total.get("skipped_tasks", [])
-    if not errors and not skipped_tasks:
-        return None
+
+    log_dir = os.path.join(BASE_DIR, "sync_logs")
+    os.makedirs(log_dir, exist_ok=True)
 
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = os.path.join(BASE_DIR, f"sync_log_{ts}.txt")
+    log_path = os.path.join(log_dir, f"sync_log_{ts}.txt")
 
     with open(log_path, "w", encoding="utf-8") as f:
         f.write(f"Notion WBS Sync Log — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")

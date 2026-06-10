@@ -223,6 +223,9 @@ function setButtons(loading) {
   document.getElementById("btn-rebuild").disabled = loading;
   document.getElementById("btn-refresh").innerHTML = loading
     ? '<span class="spinner"></span>Loading…' : "Refresh";
+  if (!loading) {
+    document.getElementById("btn-rebuild").innerHTML = "🔄 Rebuild cache";
+  }
 }
 
 async function loadFocus() {
