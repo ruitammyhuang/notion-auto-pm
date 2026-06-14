@@ -25,11 +25,13 @@ def create_app() -> Flask:
     from .routes.sync_routes      import bp as sync_bp
     from .routes.task_routes      import bp as task_bp
     from .routes.dashboard_routes import bp as dashboard_bp
+    from .routes.student_routes   import bp as student_bp
 
     app.register_blueprint(config_bp)
     app.register_blueprint(sync_bp)
     app.register_blueprint(task_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(student_bp)
 
     # ── Main UI route ──────────────────────────────────────────────────────────
     @app.route("/")

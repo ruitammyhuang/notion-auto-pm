@@ -1,8 +1,10 @@
 """
-tasks.py
-────────
-quick_add_task: create a task simultaneously in Project WBS,
-Master WBS Tasks, and Work Sessions in a single call.
+tasks.py  (focal — two-layer)
+──────────────────────────────
+quick_add_task: create a task in Project WBS + Work Sessions in one call.
+
+Change from v2: no Master WBS entry, no backlink relation, no focal_mappings.
+Sessions mapping: wbs_page_id → {ws_id, fp, name, planned_end, ...}.
 """
 
 from __future__ import annotations
@@ -15,13 +17,11 @@ from .config import (
     PRIORITY_MAP,
     VALID_PRIORITIES,
     VALID_WORK_TYPES,
-    load_mappings,
-    save_mappings,
     load_sessions_mappings,
     save_sessions_mappings,
 )
 from .notion_client import NotionClient, p_title, p_text, p_select, p_date
-from .sync_engine import regenerate_focus_cache
+from .sync_engine import regenerate_focus_cache, _field_fingerprint
 
 
 def quick_add_task(
@@ -30,8 +30,10 @@ def quick_add_task(
     project_id: str,
     task_name: str,
     task_name_field: str,
-    backlink_field: str,
     session_start: str,
+    session_end: str = "",
+    session_comment: str = "",
+    session_status: str = "",
     due_date: str = "",
     priority: str = "Normal",
     work_type: str = "",
@@ -44,16 +46,28 @@ def quick_add_task(
     level_field: str = "",
     org_division: str = "",
     org_division_field: str = "",
+    student_name: str = "",
+    student_name_field: str = "",
+    current_phase: str = "",
+    current_phase_field: str = "",
+    degree: str = "",
+    degree_field: str = "",
+    my_role: str = "",
+    my_role_field: str = "",
+    chair: str = "",
+    chair_field: str = "",
+    program: str = "",
+    program_field: str = "",
+    project_name: str = "",
+    backlink_field: str = "",
 ) -> dict:
     """
-    Create a task simultaneously in three places:
+    Create a task in three places:
       1. Project WBS database  (source_db_id)
-      2. Master WBS Tasks
-      3. Work Sessions  (with Session Start pre-filled if provided)
+      2. Work Sessions         (with Session Start pre-filled if provided)
 
-    Returns {"wbs_url", "master_url", "ws_url"} or raises on error.
+    Returns {wbs_url, ws_url}.
     """
-    mappings          = load_mappings()
     sessions_mappings = load_sessions_mappings()
 
     # ── 1. Project WBS task ───────────────────────────────────────────────────
@@ -73,48 +87,78 @@ def quick_add_task(
         wbs_props[level_field] = {"select": {"name": level}}
     if org_division and org_division_field:
         wbs_props[org_division_field] = p_text(org_division)
+    if student_name and student_name_field:
+        wbs_props[student_name_field] = p_text(student_name)
+    if current_phase and current_phase_field:
+        wbs_props[current_phase_field] = {"select": {"name": current_phase}}
+    if degree and degree_field:
+        wbs_props[degree_field] = {"select": {"name": degree}}
+    if my_role and my_role_field:
+        wbs_props[my_role_field] = {"select": {"name": my_role}}
+    if chair and chair_field:
+        wbs_props[chair_field] = p_text(chair)
+    if program and program_field:
+        wbs_props[program_field] = {"select": {"name": program}}
 
     wbs_page = client.create_page({"database_id": source_db_id}, wbs_props)
     wbs_id   = wbs_page["id"]
 
-    # ── 2. Master WBS entry ───────────────────────────────────────────────────
+    norm_priority = PRIORITY_MAP.get((priority or "").lower(), priority or "Normal")
+
+    # ── 2. Master WBS Tasks relay entry ──────────────────────────────────────
     master_props: dict = {
         "Task Name": p_title(task_name),
         "Project":   {"relation": [{"id": project_id}]},
     }
-    if due_date:
-        master_props["Planned End"] = p_date({"start": due_date})
-        ps = (datetime.strptime(due_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
-        master_props["Planned Start"] = p_date({"start": ps})
-
-    norm_priority = PRIORITY_MAP.get((priority or "").lower(), priority or "Normal")
-    if norm_priority in VALID_PRIORITIES:
-        master_props["Priority"] = {"select": {"name": norm_priority}}
-    if work_type and work_type in VALID_WORK_TYPES:
-        master_props["Work Type"] = {"select": {"name": work_type}}
-
     master_page = client.create_page({"database_id": MASTER_DB_ID}, master_props)
     master_id   = master_page["id"]
 
-    # Back-link Project WBS → Master WBS
-    client.write_backlink(wbs_id, master_id, backlink_field)
+    # Write backlink: WBS row → Master WBS Tasks entry
+    if backlink_field:
+        try:
+            client.patch_page(wbs_id, {"properties": {
+                backlink_field: {"relation": [{"id": master_id}]}
+            }}).raise_for_status()
+        except Exception:
+            pass  # backlink is navigation sugar; don't fail the whole add
 
-    mappings[wbs_id] = {"master_id": master_id, "db": source_db_id}
-    save_mappings(mappings)
-
-    # ── 3. Work Session ───────────────────────────────────────────────────────
+    # ── 3. Work Session linked to Master WBS Tasks ────────────────────────────
+    # Work Sessions schema: Session Name, Task (→ Master WBS Tasks),
+    # Project, Work Type, Session Start, Session End, Status, Notes.
     ws_props: dict = {
         "Session Name": p_title(task_name),
-        "Task":    {"relation": [{"id": master_id}]},
-        "Project": {"relation": [{"id": project_id}]},
+        "Task":         {"relation": [{"id": master_id}]},
+        "Project":      {"relation": [{"id": project_id}]},
     }
+    if work_type and work_type in VALID_WORK_TYPES:
+        ws_props["Work Type"] = p_select(work_type)
     if session_start:
         ws_props["Session Start"] = {"date": {"start": session_start}}
+    if session_end:
+        ws_props["Session End"] = {"date": {"start": session_end}}
+    if session_comment:
+        ws_props["Notes"] = p_text(session_comment)
+    if session_status:
+        ws_props["Status"] = {"select": {"name": session_status}}
 
     ws_page = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, ws_props)
     ws_id   = ws_page["id"]
 
-    sessions_mappings[master_id] = ws_id
+    # ── 4. Update sessions mapping ────────────────────────────────────────────
+    fp = _field_fingerprint(task_name, norm_priority if norm_priority in VALID_PRIORITIES else None,
+                            work_type or None, due_date or None, None, None)
+    sessions_mappings[wbs_id] = {
+        "master_id":   master_id,
+        "ws_id":       ws_id,
+        "fp":          fp,
+        "name":        task_name,
+        "planned_end": due_date or "",
+        "priority":    norm_priority if norm_priority in VALID_PRIORITIES else "",
+        "work_type":   work_type or "",
+        "project_id":  project_id,
+        "project_name":project_name,
+        "source_db_id":source_db_id,
+    }
     save_sessions_mappings(sessions_mappings)
 
     regenerate_focus_cache(client)

@@ -1,7 +1,12 @@
 """
-routes/dashboard_routes.py
-───────────────────────────
-Focus task list, workload dashboard, design doc pages, and related APIs.
+routes/dashboard_routes.py  (focal — two-layer)
+─────────────────────────────────────────────────
+Focus task list, workload dashboard, design doc pages.
+
+Key changes from v2:
+  - api_focus_tasks: uses ws_status from cache (no rollup fields needed)
+  - api_workload: Work Type read directly from Work Sessions Notion field
+  - api_writeback_dates: reads from sessions_mappings (no Master WBS query)
 """
 
 from __future__ import annotations
@@ -17,9 +22,7 @@ from flask import Blueprint, jsonify, render_template, request
 from ..config import (
     FOCUS_CACHE_FILE,
     WORK_SESSIONS_DB_ID,
-    MASTER_DB_ID,
     load_config,
-    load_mappings,
     load_sessions_mappings,
 )
 from ..notion_client import NotionClient, extract, p_date
@@ -38,15 +41,13 @@ def focus_page():
 @bp.route("/api/focus-tasks", methods=["POST"])
 def api_focus_tasks():
     """
-    Classify tasks from the focus cache into Overdue / Due Today / Due This Week,
-    then check each task's Work Sessions for completion status.
+    Classify tasks from the focus cache into Overdue / Due Today / Due This Week.
 
-    Body: {token?} — falls back to saved config token if omitted.
+    Two-layer simplification: completion is a single status check on the cached
+    ws_status field — no rollup counts, no Work Session page fetches needed.
     """
     body  = request.json or {}
-    token = body.get("token", "").strip()
-    if not token:
-        token = load_config().get("token", "").strip()
+    token = body.get("token", "").strip() or load_config().get("token", "").strip()
     if not token:
         return jsonify({"error": "No token — save one in the Sync Tool first"}), 400
 
@@ -77,43 +78,13 @@ def api_focus_tasks():
         elif today_s < pe <= week_s:
             buckets["this_week"].append(task)
 
-    client = NotionClient(token)
+    priority_order = {"Urgent": 0, "High": 1, "Normal": 2, "Low": 3}
 
     def is_completed(task: dict) -> bool:
-        # Fast path: use rollup counts stored in the cache.
-        # If total_sessions > 0 and all sessions are completed, the task is done.
-        total     = task.get("total_sessions", 0)
-        completed = task.get("completed_sessions", 0)
-        if total > 0:
-            return completed >= total
-
-        # Fallback: for tasks whose rollup counts weren't cached (e.g. old cache
-        # entries), fetch each Work Session page and check Status directly.
-        ws_urls = task.get("work_sessions", [])
-        if not ws_urls:
-            return False
-        active_count = 0
-        for url in ws_urls:
-            page_id = url.rstrip("/").split("/")[-1].replace("-", "")
-            if len(page_id) == 32:
-                page_id = f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
-            try:
-                r = client.get_page(page_id)
-                if not r.ok:
-                    continue   # skip unreachable sessions rather than aborting
-                data = r.json()
-                if data.get("archived") or data.get("in_trash"):
-                    continue
-                active_count += 1
-                status = extract(data.get("properties", {}).get("Status", {}))
-                if status != "Completed":
-                    return False
-            except Exception:
-                continue       # skip on error; don't suppress a completed task
-        # All fetched active sessions were Completed (and at least one existed)
-        return active_count > 0
-
-    priority_order = {"Urgent": 0, "High": 1, "Normal": 2, "Low": 3}
+        # Two-layer: completion status is cached in ws_status.
+        # Optionally re-check Notion on demand (not done here for speed;
+        # use /api/regenerate-focus-cache to get fresh statuses).
+        return task.get("ws_status") == "Completed"
 
     def filter_and_sort(tasks: list, sort_by_date: bool = False) -> list:
         result = [t for t in tasks if not is_completed(t)]
@@ -138,9 +109,7 @@ def api_focus_tasks():
 def api_regenerate_focus_cache():
     """Force-rebuild focus-task-list-cache.json from Notion."""
     body  = request.json or {}
-    token = body.get("token", "").strip()
-    if not token:
-        token = load_config().get("token", "").strip()
+    token = body.get("token", "").strip() or load_config().get("token", "").strip()
     if not token:
         return jsonify({"error": "No token"}), 400
     try:
@@ -167,13 +136,14 @@ def api_workload():
     """
     Query Work Sessions for a date range and return aggregated workload data.
 
+    Two-layer simplification: Work Type is read directly from the Work Session
+    (no secondary fetch from Master WBS Tasks).
+
     Body: {token?, mode, start_date?, end_date?}
     mode: "today" | "this_week" | "last_week" | "this_month" | "custom"
     """
     body  = request.json or {}
-    token = body.get("token", "").strip()
-    if not token:
-        token = load_config().get("token", "").strip()
+    token = body.get("token", "").strip() or load_config().get("token", "").strip()
     if not token:
         return jsonify({"error": "No token — save one in the Sync Tool first"}), 400
 
@@ -204,7 +174,7 @@ def api_workload():
     start_s = start.isoformat()
     end_s   = end.isoformat()
 
-    client      = NotionClient(token)
+    client = NotionClient(token)
     filter_body = {"and": [
         {"property": "Session Start", "date": {"on_or_after":  start_s}},
         {"property": "Session Start", "date": {"on_or_before": end_s + "T23:59:59"}},
@@ -252,19 +222,18 @@ def api_workload():
         dur_formula = props.get("Duration", {}).get("formula", {})
         duration    = dur_formula.get("number") if dur_formula.get("type") == "number" else None
 
-        # Fallback: compute from start/end timestamps when formula is null
         if duration is None and sess_start and sess_end:
             try:
-                def _parse_iso(s: str):
-                    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
-                dt_s = _parse_iso(sess_start)
-                dt_e = _parse_iso(sess_end)
-                diff = (dt_e - dt_s).total_seconds()
+                def _parse_iso(ts: str):
+                    return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                diff = (_parse_iso(sess_end) - _parse_iso(sess_start)).total_seconds()
                 if diff > 0:
                     duration = diff / 3600.0
             except Exception:
                 pass
 
+        # Work Type: read directly from the Work Sessions Notion field.
+        # Set by sync (from WBS) and editable in Notion for standalone sessions.
         work_type = extract(props.get("Work Type", {})) or "Unclassified"
         status    = extract(props.get("Status", {})) or "—"
 
@@ -285,98 +254,71 @@ def api_workload():
         })
 
         if duration:
-            total_hours              += duration
-            by_project[proj_name]    = by_project.get(proj_name, 0)    + duration
-            by_work_type[work_type]  = by_work_type.get(work_type, 0)  + duration
+            total_hours             += duration
+            by_project[proj_name]   = by_project.get(proj_name, 0)   + duration
+            by_work_type[work_type] = by_work_type.get(work_type, 0) + duration
 
     result_sessions.sort(key=lambda s: s["start"], reverse=True)
-    by_project_list   = sorted(by_project.items(),   key=lambda x: x[1], reverse=True)
-    by_work_type_list = sorted(by_work_type.items(), key=lambda x: x[1], reverse=True)
-
     return jsonify({
         "start_date":    start_s,
         "end_date":      end_s,
         "total_hours":   round(total_hours, 2),
         "session_count": len(result_sessions),
         "project_count": len(by_project),
-        "by_project":    [{"name": k, "hours": round(v, 2)} for k, v in by_project_list],
-        "by_work_type":  [{"name": k, "hours": round(v, 2)} for k, v in by_work_type_list],
+        "by_project":  [{"name": k, "hours": round(v, 2)}
+                         for k, v in sorted(by_project.items(), key=lambda x: x[1], reverse=True)],
+        "by_work_type": [{"name": k, "hours": round(v, 2)}
+                          for k, v in sorted(by_work_type.items(), key=lambda x: x[1], reverse=True)],
         "sessions":      result_sessions,
     })
 
 
+# ── Writeback dates ────────────────────────────────────────────────────────────
+
 @bp.route("/api/writeback-dates", methods=["POST"])
 def api_writeback_dates():
     """
-    Read Planned Start + Planned End from every Master WBS task that has a mapping,
-    then write those dates back to the corresponding Project WBS row.
+    Read Planned End from sessions_mappings and write it back to the WBS task.
+
+    Two-layer simplification: metadata is in the local sessions_mappings file —
+    no Notion API query needed to find the dates.  Only patches WBS rows where
+    the date field name is known from config.
     """
     body  = request.json or {}
-    token = body.get("token", "").strip()
-    if not token:
-        token = load_config().get("token", "").strip()
+    token = body.get("token", "").strip() or load_config().get("token", "").strip()
     if not token:
         return jsonify({"error": "No token"}), 400
 
-    mappings = load_mappings()
-    inverted: dict[str, dict] = {}
-    for src_page, info in mappings.items():
-        mid   = info.get("master_id", "")
-        db_id = info.get("db", "")
-        if mid:
-            inverted[mid] = {"source_page_id": src_page, "db_id": db_id}
+    mappings = load_sessions_mappings()
+    config   = load_config()
+    sources  = config.get("sources", {})
 
-    if not inverted:
+    if not mappings:
         return jsonify({"error": "No task mappings found — run a sync first"}), 400
 
-    sources   = load_config().get("sources", {})
-    db_fields = {
-        db_id: {
-            "planned_start": src.get("field_map", {}).get("planned_start", ""),
-            "planned_end":   src.get("field_map", {}).get("planned_end",   ""),
-        }
-        for db_id, src in sources.items()
-    }
-
     client = NotionClient(token)
-    try:
-        master_pages = client.query_db(MASTER_DB_ID, {"or": [
-            {"property": "Planned End",   "date": {"is_not_empty": True}},
-            {"property": "Planned Start", "date": {"is_not_empty": True}},
-        ]})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
     updated, skipped, errors = 0, 0, []
-    for page in master_pages:
-        mid = page["id"]
-        if mid not in inverted:
+
+    for wbs_id, info in mappings.items():
+        if not isinstance(info, dict) or info.get("deleted"):
+            continue
+
+        planned_end  = info.get("planned_end", "")
+        source_db_id = info.get("source_db_id", "")
+        if not planned_end or not source_db_id:
             skipped += 1
             continue
 
-        src_page_id = inverted[mid]["source_page_id"]
-        db_id       = inverted[mid]["db_id"]
-        fields      = db_fields.get(db_id, {})
-
-        props = page["properties"]
-        ps_raw = extract(props.get("Planned Start", {}))
-        pe_raw = extract(props.get("Planned End",   {}))
-        planned_start = ps_raw["start"] if isinstance(ps_raw, dict) else ps_raw
-        planned_end   = pe_raw["start"] if isinstance(pe_raw, dict) else pe_raw
-
-        patch: dict = {}
-        if planned_start and fields.get("planned_start"):
-            patch[fields["planned_start"]] = p_date({"start": planned_start})
-        if planned_end and fields.get("planned_end"):
-            patch[fields["planned_end"]]   = p_date({"start": planned_end})
-
-        if not patch:
+        pe_field = sources.get(source_db_id, {}).get("field_map", {}).get("planned_end", "")
+        if not pe_field:
             skipped += 1
             continue
 
         for attempt in range(2):
             try:
-                r = client.patch_page(src_page_id, {"properties": patch})
+                r = client.patch_page(wbs_id, {"properties": {
+                    pe_field: p_date({"start": planned_end})
+                }})
                 r.raise_for_status()
                 updated += 1
                 break
@@ -384,7 +326,7 @@ def api_writeback_dates():
                 if attempt == 0:
                     time.sleep(2)
                     continue
-                errors.append(f"Timeout after retry: page {src_page_id}")
+                errors.append(f"Timeout: page {wbs_id[:8]}")
             except Exception as e:
                 errors.append(str(e))
                 break

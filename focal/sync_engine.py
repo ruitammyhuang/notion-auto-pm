@@ -1,11 +1,27 @@
 """
-sync_engine.py
-──────────────
-All synchronisation logic: Project WBS → Master WBS Tasks → Work Sessions.
-Deduplication and focus-cache regeneration also live here.
+sync_engine.py  (focal — three-layer relay)
+────────────────────────────────────────────
+Three-layer sync: Project WBS → Master WBS Tasks (relay) → Work Sessions.
 
-All public functions accept a NotionClient instance instead of a raw token,
-so HTTP implementation details stay out of the sync logic.
+Master WBS Tasks is a thin central relay table.  It exists solely so that
+Work Sessions can hold a single "Task" relation pointing to it (Notion
+relations target exactly one database, so we can't point directly to the
+many individual WBS databases).  Beyond Task Name and Project, no heavy
+metadata is stored there.
+
+Each WBS task gets:
+  1. One Master WBS Tasks entry (relay).  The WBS row is back-linked to it
+     via its "Master WBS" relation field.
+  2. One Work Session linked to the Master WBS Tasks entry via "Task".
+
+Task metadata (name, planned_end, priority, work_type) is cached in
+sessions_mappings.json so the focus cache doesn't need extra API calls.
+
+Public surface:
+  sync_one_database()      — sync one WBS DB (three-layer)
+  regenerate_focus_cache() — rebuild focus-task-list-cache.json
+  has_logged_hours()       — used by stale-task cleanup
+  _field_fingerprint()     — exported for use in tasks.py
 """
 
 from __future__ import annotations
@@ -26,15 +42,14 @@ from .config import (
     PRIORITY_MAP,
     VALID_PRIORITIES,
     VALID_WORK_TYPES,
-    load_mappings,
-    save_mappings,
+    load_sessions_mappings,
+    save_sessions_mappings,
 )
-from .notion_client import NotionClient, extract, p_title, p_text, p_select, p_date
+from .notion_client import NotionClient, extract, p_title, p_select
 
 
 # ── Internal retry helper ──────────────────────────────────────────────────────
 def _with_retry(fn, *args, **kwargs):
-    """Call fn(*args, **kwargs), retrying once after 3 s on Timeout."""
     for attempt in range(2):
         try:
             return fn(*args, **kwargs)
@@ -45,151 +60,112 @@ def _with_retry(fn, *args, **kwargs):
             raise
 
 
-# ── Work-session date check ────────────────────────────────────────────────────
-def _ws_has_date(ws_page: dict) -> bool:
-    """Return True if any date-type property on this Work Session page is set."""
-    for prop_val in ws_page.get("properties", {}).values():
-        if prop_val.get("type") == "date" and prop_val.get("date") is not None:
-            return True
-    return False
-
-
+# ── Hours-logged check ─────────────────────────────────────────────────────────
 def has_logged_hours(client: NotionClient, ws_id: str) -> bool:
-    """Return True if a Work Session has any actual time logged.
-    Defaults to True on any error to avoid accidentally discarding sessions."""
+    """
+    Return True if a Work Session has a Session End recorded.
+    Session Start alone (set automatically by Quick Add) is only a
+    placeholder.  A Session End means real work happened.
+    Defaults to True on any error to avoid accidentally discarding sessions.
+    """
     try:
         r = client.get_page(ws_id)
         if r.status_code == 404:
             return False
         r.raise_for_status()
-        for prop_val in r.json().get("properties", {}).values():
-            if prop_val.get("type") == "date" and prop_val.get("date") is not None:
-                return True
-        return False
+        end_prop = r.json().get("properties", {}).get("Session End", {})
+        return end_prop.get("type") == "date" and end_prop.get("date") is not None
     except Exception:
-        return True  # fail-safe
+        return True   # fail-safe
 
 
-# ── Page-metadata helpers (pure) ───────────────────────────────────────────────
-def _get_task_master_id(ws_page: dict) -> str | None:
-    """Find the master task ID from any relation property that isn't 'Project'."""
-    for prop_name, prop_val in ws_page.get("properties", {}).items():
-        if (prop_val.get("type") == "relation"
-                and prop_name.lower() not in ("project", "projects")):
-            rels = prop_val.get("relation", [])
-            if rels:
-                return rels[0]["id"]
-    return None
-
-
-def _get_page_title(page: dict) -> str:
-    """Extract plain-text title from a Notion page object."""
-    for prop_val in page.get("properties", {}).values():
-        if prop_val.get("type") == "title":
-            parts = prop_val.get("title", [])
-            return "".join(p.get("plain_text", "") for p in parts).strip()
-    return ""
-
-
-def _get_project_id_from_page(page: dict) -> str | None:
-    """Extract the first project relation ID from a Notion page."""
-    for prop_name, prop_val in page.get("properties", {}).items():
-        if (prop_val.get("type") == "relation"
-                and prop_name.lower() in ("project", "projects")):
-            rels = prop_val.get("relation", [])
-            if rels:
-                return rels[0]["id"]
-    return None
-
-
+# ── Archive helper ─────────────────────────────────────────────────────────────
 def _archive_page(client: NotionClient, page_id: str, errors: list) -> bool:
-    """Archive a Notion page; append to errors list on failure.
-
-    Notion returns 400 when a page is already trashed/archived and 404 when it
-    has been hard-deleted.  Both mean the page is effectively gone, so we treat
-    them as success rather than surfacing a spurious error to the user.
-    """
     try:
         r = client.patch_page(page_id, {"archived": True})
-        if r.status_code in (404,):
-            return True   # hard-deleted — already gone
-        if r.status_code == 400:
-            try:
-                msg = (r.json().get("message") or "").lower()
-            except Exception:
-                msg = ""
-            if any(k in msg for k in ("archived", "trash", "deleted", "can only update")):
-                return True   # already in trash — mission accomplished
         r.raise_for_status()
         return True
     except Exception as e:
-        errors.append(f"Could not archive {page_id[:8]}: {e}")
+        errors.append(f"Archive {page_id[:8]}: {e}")
         return False
 
 
-# ── Focus-task cache ───────────────────────────────────────────────────────────
+# ── Fingerprint (change detection) ────────────────────────────────────────────
+def _field_fingerprint(*values) -> str:
+    raw = "|".join(str(v or "") for v in values)
+    return hashlib.md5(raw.encode()).hexdigest()[:12]
+
+
+# ── Title extractor ────────────────────────────────────────────────────────────
+def _get_title(props: dict) -> str:
+    for v in props.values():
+        if v.get("type") == "title":
+            return "".join(r["plain_text"] for r in v.get("title", []))
+    return ""
+
+
+# ── Focus cache ────────────────────────────────────────────────────────────────
 def regenerate_focus_cache(client: NotionClient) -> None:
-    """Regenerate focus-task-list-cache.json from Master WBS Tasks.
-    Includes only tasks with Planned End set. Failures are silent."""
-    import json
+    """
+    Rebuild focus-task-list-cache.json from the sessions mapping + live
+    Work Session statuses.
 
+    Strategy:
+      1. Load sessions_mappings (has all task metadata — no per-task API calls).
+      2. Batch-query Work Sessions to get current Status for each ws_id.
+      3. Emit tasks that have a planned_end and are not Completed.
+    """
     try:
-        filter_body = {"property": "Planned End", "date": {"is_not_empty": True}}
-        pages = client.query_db(MASTER_DB_ID, filter_body)
+        mappings = load_sessions_mappings()
+        if not mappings:
+            _write_empty_cache()
+            return
 
-        # Collect unique project page IDs for batch name lookup
-        project_ids: set[str] = set()
-        for page in pages:
-            for rel in page["properties"].get("Project", {}).get("relation", []):
-                project_ids.add(rel["id"])
+        # Collect all ws_ids we care about
+        ws_id_to_wbs: dict[str, str] = {}
+        for wbs_id, info in mappings.items():
+            if isinstance(info, dict) and info.get("ws_id"):
+                ws_id_to_wbs[info["ws_id"]] = wbs_id
 
-        # Fetch project names
-        project_names: dict[str, str] = {}
-        for pid in project_ids:
-            try:
-                r = client.get_page(pid)
-                if r.ok:
-                    props = r.json().get("properties", {})
-                    project_names[pid] = extract(props.get("Project Name", {})) or ""
-            except Exception:
-                pass
+        # One query to get current Status of all Work Sessions
+        ws_status: dict[str, str] = {}
+        try:
+            all_ws = client.query_db(WORK_SESSIONS_DB_ID)
+            for ws in all_ws:
+                ws_status[ws["id"]] = extract(ws.get("properties", {}).get("Status", {})) or ""
+        except Exception as e:
+            print(f"[focus-cache] Work Sessions query failed: {e}")
+            # Fall back to status stored in local mappings (from last sync)
+            for wbs_id, info in mappings.items():
+                if isinstance(info, dict) and info.get("ws_id"):
+                    ws_status[info["ws_id"]] = info.get("status", "")
 
-        # Build task entries
         tasks = []
-        for page in pages:
-            props    = page.get("properties", {})
-            date_raw = extract(props.get("Planned End", {}))
-            planned_end = date_raw["start"] if isinstance(date_raw, dict) else None
-            if not planned_end:
+        for wbs_id, info in mappings.items():
+            if not isinstance(info, dict):
                 continue
-            rel_list = props.get("Project", {}).get("relation", [])
-            proj_id  = rel_list[0]["id"] if rel_list else ""
-            ws_urls  = [
-                f"https://app.notion.com/p/{r['id'].replace('-', '')}"
-                for r in props.get("Work Sessions", {}).get("relation", [])
-            ]
-            # Read rollup counts directly from the page response — no extra API calls.
-            # Completed Sessions = count of sessions with Status "Completed" (rollup: sum)
-            # Total Sessions     = count of all linked Work Sessions (rollup: count_values)
-            completed_sessions = (
-                props.get("Completed Sessions", {}).get("rollup", {}).get("number") or 0
-            )
-            total_sessions = (
-                props.get("Total Sessions", {}).get("rollup", {}).get("number") or 0
-            )
-            pid_clean = page["id"].replace("-", "")
+            ws_id       = info.get("ws_id", "")
+            planned_end = info.get("planned_end", "")
+            if not ws_id or not planned_end:
+                continue
+
+            status = ws_status.get(ws_id, info.get("status", ""))
+            if status == "Completed":
+                continue
+
+            wbs_clean = wbs_id.replace("-", "")
+            ws_clean  = ws_id.replace("-", "")
             tasks.append({
-                "id":                  page["id"],
-                "url":                 f"https://app.notion.com/p/{pid_clean}",
-                "name":                extract(props.get("Task Name", {})) or "",
-                "planned_end":         planned_end,
-                "priority":            extract(props.get("Priority", {})) or "Normal",
-                "work_type":           extract(props.get("Work Type", {})) or "",
-                "project_name":        project_names.get(proj_id, ""),
-                "notes":               extract(props.get("Notes", {})) or "",
-                "work_sessions":       ws_urls,
-                "completed_sessions":  int(completed_sessions),
-                "total_sessions":      int(total_sessions),
+                "id":           wbs_id,
+                "url":          f"https://app.notion.com/p/{wbs_clean}",
+                "ws_id":        ws_id,
+                "ws_url":       f"https://app.notion.com/p/{ws_clean}",
+                "name":         info.get("name", ""),
+                "planned_end":  planned_end,
+                "priority":     info.get("priority", "Normal") or "Normal",
+                "work_type":    info.get("work_type", ""),
+                "project_name": info.get("project_name", ""),
+                "ws_status":    status,
             })
 
         tasks.sort(key=lambda t: t["planned_end"])
@@ -205,230 +181,71 @@ def regenerate_focus_cache(client: NotionClient) -> None:
         print(f"[focus-cache] regeneration failed: {e}")
 
 
-# ── Orphaned mapping cleanup ───────────────────────────────────────────────────
-def find_orphaned_candidates(
-    all_current_src_ids: set,
-    mappings: dict,
-    synced_db_ids: set = None,
-    source_labels: dict = None,
-) -> list[dict]:
-    """Identify mapping entries whose source WBS page no longer exists.
-
-    Returns a list of dicts with metadata for each candidate, without
-    modifying any state — the caller decides whether to proceed.
-    Each dict has: sid, master_id, db, db_title, task_name.
-
-    synced_db_ids scoping: only entries whose 'db' is in synced_db_ids (or
-    has no db tag) are candidates. Pass None to consider all.
-    """
-    source_labels = source_labels or {}
-    candidates = []
-    for sid, v in mappings.items():
-        if not isinstance(v, dict):
-            continue
-        if v.get("deleted"):                        # skip tombstones
-            continue
-        if sid in all_current_src_ids:              # still exists
-            continue
-        db = v.get("db")
-        if db is not None and synced_db_ids is not None and db not in synced_db_ids:
-            continue                                # different sync scope
-        candidates.append({
-            "sid":       sid,
-            "master_id": v.get("master_id", ""),
-            "db":        db or "",
-            "db_title":  source_labels.get(db, db or "unknown"),
-            "task_name": v.get("task_name") or v.get("fp") or sid[:8] + "…",
-        })
-    return candidates
+def _write_empty_cache() -> None:
+    cache = {"generated_at": datetime.utcnow().isoformat() + "Z",
+             "task_count": 0, "tasks": []}
+    with open(FOCUS_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2)
 
 
-def delete_orphaned_candidates(
-    client: NotionClient,
-    candidates: list[dict],
-    mappings: dict,
-    sessions_mappings: dict,
-) -> int:
-    """Archive Notion pages and remove mapping entries for the given candidates.
-
-    Call this only after the user has confirmed deletion.
-    Returns the number of entries cleaned up."""
-    cleaned = 0
-    for item in candidates:
-        sid       = item["sid"]
-        master_id = item["master_id"]
-        try:
-            client.patch_page(master_id, {"archived": True})
-        except Exception:
-            pass
-        if sessions_mappings and master_id in sessions_mappings:
-            ws_id = sessions_mappings[master_id]
-            # Preserve work sessions with logged hours — historical time data
-            # should survive even when the source task is deleted.
-            if not has_logged_hours(client, ws_id):
-                try:
-                    client.patch_page(ws_id, {"archived": True})
-                except Exception:
-                    pass
-            del sessions_mappings[master_id]
-        if sid in mappings:
-            del mappings[sid]
-        cleaned += 1
-    return cleaned
+# ── Project name lookup (cached per sync run) ─────────────────────────────────
+_project_name_cache: dict[str, str] = {}
 
 
-def cleanup_orphaned_mappings(
-    client: NotionClient,
-    all_current_src_ids: set,
-    mappings: dict,
-    sessions_mappings: dict,
-    synced_db_ids: set = None,
-) -> int:
-    """Find and immediately delete orphaned mapping entries.
-
-    Convenience wrapper kept for backward compatibility. For interactive
-    flows that need user confirmation, use find_orphaned_candidates() +
-    delete_orphaned_candidates() separately.
-
-    Returns: number of entries cleaned up."""
-    candidates = find_orphaned_candidates(
-        all_current_src_ids, mappings, synced_db_ids
-    )
-    return delete_orphaned_candidates(client, candidates, mappings, sessions_mappings)
+def _get_project_name(client: NotionClient, project_id: str) -> str:
+    if project_id in _project_name_cache:
+        return _project_name_cache[project_id]
+    try:
+        r = client.get_page(project_id)
+        if r.ok:
+            props = r.json().get("properties", {})
+            for v in props.values():
+                if v.get("type") == "title":
+                    name = extract(v)
+                    if name:
+                        _project_name_cache[project_id] = name
+                        return name
+    except Exception:
+        pass
+    return ""
 
 
-# ── Work Sessions sync ─────────────────────────────────────────────────────────
-def sync_work_sessions_for_project(
-    client: NotionClient,
-    project_page_id: str,
-    sessions_mappings: dict,
-) -> dict:
-    """
-    Idempotent Work Sessions sync for one project.
-
-    1. Query existing Work Sessions from Notion → build master_id → ws_id lookup.
-    2. Query Master WBS Tasks for this project.
-    3. For each master task with no session in Notion → create one.
-    """
-    # Step 1: ground-truth from Notion
-    existing_ws = client.query_db(WORK_SESSIONS_DB_ID, filter_body={
-        "property": "Project",
-        "relation": {"contains": project_page_id},
-    })
-
-    notion_state: dict[str, str] = {}
-    for ws in existing_ws:
-        task_rel = ws.get("properties", {}).get("Task", {}).get("relation", [])
-        if not task_rel:
-            continue
-        mid = task_rel[0]["id"]
-        has_hours = _ws_has_date(ws)
-        if mid not in notion_state or has_hours:
-            notion_state[mid] = ws["id"]
-
-    # Reconcile: fill sessions_mappings gaps from Notion state
-    for mid, ws_id in notion_state.items():
-        if mid not in sessions_mappings:
-            sessions_mappings[mid] = ws_id
-
-    # Step 2: Master WBS Tasks for this project
-    master_pages = client.query_db(MASTER_DB_ID, filter_body={
-        "property": "Project",
-        "relation": {"contains": project_page_id},
-    })
-
-    created = skipped = 0
-    errors: list[str] = []
-
-    for master_page in master_pages:
-        master_id = master_page["id"]
-
-        if master_id in notion_state or master_id in sessions_mappings:
-            skipped += 1
-            continue
-
-        task_name = ""
-        for v in master_page["properties"].values():
-            if v.get("type") == "title":
-                task_name = "".join(r["plain_text"] for r in v.get("title", []))
-                break
-
-        ws_props = {
-            "Session Name": p_title(task_name or "Work Session"),
-            "Task":    {"relation": [{"id": master_id}]},
-            "Project": {"relation": [{"id": project_page_id}]},
-        }
-
-        try:
-            ws_page = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, ws_props)
-            sessions_mappings[master_id] = ws_page["id"]
-            created += 1
-        except requests.HTTPError as e:
-            if (e.response is not None and e.response.status_code == 404):
-                return {
-                    "created": created, "skipped": skipped,
-                    "errors": [
-                        "Work Sessions database not accessible (404). "
-                        "In Notion open ⏱️ Work Sessions → click ··· → Connections "
-                        "→ add your integration, then sync again."
-                    ],
-                }
-            errors.append(f"'{task_name or master_id[:8]}': {e}")
-        except Exception as e:
-            errors.append(f"'{task_name or master_id[:8]}': {e}")
-
-    return {"created": created, "skipped": skipped, "errors": errors}
-
-
-# ── Change-detection fingerprint ──────────────────────────────────────────────
-def _field_fingerprint(
-    task_name: str | None,
-    priority: str | None,
-    work_type: str | None,
-    category_val: str | None,
-    notes: str | None,
-    planned_start: str | None,
-    planned_end: str | None,
-) -> str:
-    """Stable MD5 fingerprint of source-derived field values.
-    Used by sync_one_database to skip no-op PATCH calls when nothing changed."""
-    data = {
-        "n": task_name or "",
-        "p": priority or "",
-        "w": work_type or "",
-        "c": category_val or "",
-        "t": notes or "",
-        "s": planned_start or "",
-        "e": planned_end or "",
-    }
-    return hashlib.md5(json.dumps(data, sort_keys=True).encode()).hexdigest()
-
-
-# ── Core sync ──────────────────────────────────────────────────────────────────
+# ── Core sync ─────────────────────────────────────────────────────────────────
 def sync_one_database(
     client: NotionClient,
     source_db_id: str,
     project_page_id: str,
     field_map: dict,
     mappings: dict,
-    backlink_field: str = "Master WBS",
-    work_type_map: dict | None = None,
-    auto_calc_planned_start: bool = True,
-    sessions_mappings: dict | None = None,
+    backlink_field: str = "",
+    auto_calc_planned_start: int = 7,
     emit=None,
 ) -> dict:
     """
-    Pull all pages from source_db_id, upsert them into Master WBS Tasks.
+    Sync one Project WBS database through three layers:
+      WBS task → Master WBS Tasks entry → Work Session
 
-    field_map keys: task_name, status, priority, notes,
-                    planned_start, planned_end, work_type, category
+    field_map keys used: task_name, planned_end, planned_start,
+                         priority, work_type, category, notes
 
-    Status is written ONLY on CREATE — never overwritten on UPDATE.
+    backlink_field: name of the relation column on the WBS database that
+                    points back to Master WBS Tasks (e.g. "Master WBS").
+                    If empty, the backlink step is skipped.
 
-    Delete behaviour: tasks previously synced from this source_db_id that no
-    longer appear are archived in Master WBS. Their Work Session is archived only
-    if no hours have been logged.
+    For each WBS task:
+      1. Find or create a Master WBS Tasks relay entry.
+      2. Write the backlink from the WBS row → Master WBS Tasks entry.
+      3. Find or create a Work Session linked to the Master WBS Tasks entry.
+      4. Update if any tracked field changed (fingerprint check).
+
+    Stale tasks (removed from WBS): archive Work Session (if no real hours
+    logged) and archive the Master WBS Tasks entry.
+
+    Returns: {created, updated, skipped, deleted, errors, new_tasks,
+              skipped_tasks, current_src_ids}
     """
+    _project_name_cache.clear()   # reset per sync run
+
     pages = client.query_db(source_db_id)
     if emit:
         emit({"type": "db_loaded", "task_count": len(pages)})
@@ -438,340 +255,196 @@ def sync_one_database(
     new_tasks:     list[dict] = []
     skipped_tasks: list[dict] = []
 
-    # Stale-task detection (tasks deleted in the source WBS)
     current_src_ids = {page["id"] for page in pages}
-    stale_src_ids = [
-        sid for sid, v in mappings.items()
-        if isinstance(v, dict) and v.get("db") == source_db_id
-        and sid not in current_src_ids
-    ]
-    for sid in stale_src_ids:
-        master_id = mappings[sid]["master_id"]
-        try:
-            client.patch_page(master_id, {"archived": True})
-        except Exception:
-            pass
-        if sessions_mappings and master_id in sessions_mappings:
-            ws_id = sessions_mappings[master_id]
-            # Preserve work sessions that have logged hours — the historical
-            # time record should survive even if the source task was deleted.
-            if not has_logged_hours(client, ws_id):
-                try:
-                    client.patch_page(ws_id, {"archived": True})
-                except Exception:
-                    pass
-            del sessions_mappings[master_id]
-        del mappings[sid]
-        deleted += 1
 
+    # ── Stale task cleanup ─────────────────────────────────────────────────────
+    # Safety guard: if the database returned 0 pages, skip stale cleanup.
+    # An empty result almost certainly means an API error or misconfiguration,
+    # not that all tasks were genuinely deleted.  Archiving everything would
+    # be catastrophic data loss.
+    if not current_src_ids:
+        if emit:
+            emit({"type": "warning",
+                  "message": f"Skipping stale cleanup for {source_db_id[:8]}: "
+                             "database returned 0 pages (possible API error)"})
+        # Still run the upsert loop (it will be a no-op with no pages)
+        return {
+            "created": 0, "updated": 0, "skipped": 0, "deleted": 0,
+            "errors": [f"Database {source_db_id[:8]} returned 0 pages — stale cleanup skipped"],
+            "new_tasks": [], "skipped_tasks": [],
+            "current_src_ids": current_src_ids,
+        }
+
+    stale = [
+        sid for sid, info in mappings.items()
+        if isinstance(info, dict)
+        and info.get("source_db_id") == source_db_id
+        and sid not in current_src_ids
+        and not info.get("deleted")
+    ]
+    for sid in stale:
+        ws_id     = mappings[sid].get("ws_id", "")
+        master_id = mappings[sid].get("master_id", "")
+        if ws_id:
+            if not has_logged_hours(client, ws_id):
+                _archive_page(client, ws_id, errors)
+            # If hours were logged, keep the Work Session (tombstone only)
+        if master_id:
+            _archive_page(client, master_id, errors)
+        mappings[sid]["deleted"] = True
+        deleted += 1
+        if emit:
+            emit({"type": "task", "task": mappings[sid].get("name", sid[:8]),
+                  "action": "deleted"})
+
+    # ── Project name (fetch once per project) ─────────────────────────────────
+    project_name = _get_project_name(client, project_page_id)
+
+    # ── Upsert loop ───────────────────────────────────────────────────────────
     for page in pages:
         src_id = page["id"]
         props  = page["properties"]
 
         def get_field(key: str):
             col = field_map.get(key, "")
-            if col and col in props:
-                return extract(props[col])
-            return None
+            return extract(props[col]) if col and col in props else None
 
-        # Task name — fall back to the title-type property if not mapped
-        task_name = get_field("task_name")
+        # Task name
+        task_name = get_field("task_name") or _get_title(props)
         if not task_name:
-            for v in props.values():
-                if v.get("type") == "title":
-                    task_name = extract(v)
-                    break
-        if not task_name:
-            skipped_tasks.append({
-                "page_id": src_id,
-                "url": page.get("url", ""),
-                "reason": "No task name / title property found — check column mapping",
-            })
             skipped += 1
+            url = page.get("url", "")
+            skipped_tasks.append({"page_id": src_id, "url": url,
+                                   "reason": "No task name found — check column mapping"})
             if emit:
                 emit({"type": "task", "task": "(untitled)", "action": "skipped"})
             continue
 
-        # Priority normalisation
+        # Tombstone check
+        existing = mappings.get(src_id, {})
+        if isinstance(existing, dict) and existing.get("deleted"):
+            skipped += 1
+            if emit:
+                emit({"type": "task", "task": task_name, "action": "skipped"})
+            continue
+
+        # Priority
         raw_pri  = get_field("priority")
         priority = PRIORITY_MAP.get(str(raw_pri).lower().strip(), raw_pri) if raw_pri else None
         if priority not in VALID_PRIORITIES:
             priority = None
 
-        # Category
-        category_val = get_field("category")
-
-        # Work Type — direct field first, then category override map
+        # Work type
         work_type = get_field("work_type")
         if work_type not in VALID_WORK_TYPES:
             work_type = None
-        if not work_type and work_type_map and category_val:
-            mapped = work_type_map.get(category_val)
-            if mapped in VALID_WORK_TYPES:
-                work_type = mapped
 
         # Dates
-        def date_start(val):
-            return val["start"] if isinstance(val, dict) else val
+        def _start(v):
+            return v["start"] if isinstance(v, dict) else v
 
-        def date_end(val):
-            if isinstance(val, dict):
-                return val.get("end") or val.get("start")
-            return val
+        def _end(v):
+            return (v.get("end") or v.get("start")) if isinstance(v, dict) else v
 
         ps_raw = get_field("planned_start")
         pe_raw = get_field("planned_end")
-        planned_start = date_start(ps_raw) if ps_raw else None
-        planned_end   = date_end(pe_raw)   if pe_raw else None
+        planned_start = _start(ps_raw) if ps_raw else None
+        planned_end   = _end(pe_raw)   if pe_raw else None
 
         if not planned_start and planned_end and auto_calc_planned_start:
             try:
                 pe_dt = datetime.strptime(planned_end[:10], "%Y-%m-%d")
-                planned_start = (pe_dt - timedelta(days=7)).strftime("%Y-%m-%d")
+                planned_start = (pe_dt - timedelta(days=int(auto_calc_planned_start))).strftime("%Y-%m-%d")
             except Exception:
                 pass
 
         notes = get_field("notes")
 
-        # ── Tombstone check ───────────────────────────────────────────────────
-        # If this source task's master was intentionally deleted/trashed, skip
-        # it permanently — do not recreate the master page.
-        if mappings.get(src_id, {}).get("deleted"):
-            skipped += 1
-            if emit:
-                emit({"type": "task", "task": task_name, "action": "skipped"})
-            continue
-        # ─────────────────────────────────────────────────────────────────────
+        # Fingerprint covers all fields that should trigger an update
+        fp = _field_fingerprint(task_name, priority, work_type, planned_end, planned_start, notes)
 
-        master_props = {
-            "Task Name": p_title(task_name),
-            "Project":   {"relation": [{"id": project_page_id}]},
-        }
-        if priority:     master_props["Priority"]  = p_select(priority)
-        if work_type:    master_props["Work Type"] = p_select(work_type)
-        if category_val: master_props["Category"]  = p_text(category_val)
-        if notes:        master_props["Notes"]     = p_text(notes)
-        master_props["Planned Start"] = p_date({"start": planned_start} if planned_start else None)
-        master_props["Planned End"]   = p_date({"start": planned_end}   if planned_end   else None)
+        # Pull existing IDs from mappings
+        master_id = existing.get("master_id", "") if isinstance(existing, dict) else ""
+        ws_id     = existing.get("ws_id",     "") if isinstance(existing, dict) else ""
+        old_fp    = existing.get("fp",         "") if isinstance(existing, dict) else ""
 
         try:
-            if src_id in mappings:
-                master_id = mappings[src_id]["master_id"]
-                mappings[src_id]["db"] = source_db_id  # tag legacy entries
-
-                # ── Change detection ───────────────────────────────────────────
-                # Only PATCH if the source values actually differ from the last
-                # sync. Without this check every task is "updated" on every run.
-                new_fp = _field_fingerprint(
-                    task_name, priority, work_type, category_val,
-                    notes, planned_start, planned_end,
-                )
-                if mappings[src_id].get("fp") == new_fp:
-                    skipped += 1
-                    if emit:
-                        emit({"type": "task", "task": task_name, "action": "skipped"})
-                    continue
-                # ──────────────────────────────────────────────────────────────
-
-                r = _with_retry(
-                    client.patch_page,
-                    master_id,
-                    {"properties": master_props},
-                )
-                # Notion returns 404 for hard-deleted pages and 400 for
-                # trashed/archived pages — both mean "recreate the master entry".
-                _page_gone = r.status_code == 404
-                if r.status_code == 400:
+            # ── Phase 1: Master WBS Tasks entry ───────────────────────────────
+            master_props: dict = {
+                "Task Name": p_title(task_name),
+                "Project":   {"relation": [{"id": project_page_id}]},
+            }
+            if not master_id:
+                r = client.create_page({"database_id": MASTER_DB_ID}, master_props)
+                master_id = r["id"]
+                # Write backlink: WBS row → Master WBS Tasks entry
+                if backlink_field:
                     try:
-                        _body_msg = (r.json().get("message") or "").lower()
-                        if any(k in _body_msg for k in (
-                                "archived", "trash", "deleted", "can only update")):
-                            _page_gone = True
-                    except Exception:
-                        pass
+                        client.patch_page(src_id, {"properties": {
+                            backlink_field: {"relation": [{"id": master_id}]}
+                        }}).raise_for_status()
+                    except Exception as e:
+                        errors.append(f"Backlink '{task_name}': {e}")
+            elif old_fp != fp:
+                # Name may have changed — keep Master entry in sync
+                client.patch_page(master_id, {"properties": {
+                    "Task Name": p_title(task_name)
+                }}).raise_for_status()
 
-                if _page_gone:
-                    # Master page was intentionally trashed — tombstone this
-                    # mapping so it is never recreated. Also archive any linked
-                    # Work Session to keep the sessions DB clean.
-                    mappings[src_id]["deleted"] = True
-                    if sessions_mappings and master_id in sessions_mappings:
-                        ws_id = sessions_mappings[master_id]
-                        _archive_page(client, ws_id, errors)
-                        del sessions_mappings[master_id]
-                    deleted += 1
-                    if emit:
-                        emit({"type": "task", "task": task_name, "action": "deleted"})
-                else:
-                    # Raise with body text so 400 errors are easy to diagnose
-                    if not r.ok:
-                        try:
-                            detail = r.json().get("message", r.text[:200])
-                        except Exception:
-                            detail = r.text[:200]
-                        raise requests.HTTPError(
-                            f"{r.status_code} {r.reason} — {detail} — url: {r.url}",
-                            response=r,
-                        )
-                    client.write_backlink(src_id, master_id, backlink_field)
-                    # Propagate rename to Work Session only if task name changed
-                    prev_name = mappings[src_id].get("task_name", "")
-                    if (sessions_mappings and master_id in sessions_mappings
-                            and task_name != prev_name):
-                        ws_id = sessions_mappings[master_id]
-                        try:
-                            client.patch_page(
-                                ws_id,
-                                {"properties": {"Session Name": p_title(task_name)}},
-                            )
-                        except Exception:
-                            pass
-                    mappings[src_id]["fp"] = new_fp
-                    mappings[src_id]["task_name"] = task_name
-                    updated += 1
-                    if emit:
-                        emit({"type": "task", "task": task_name, "action": "updated"})
-            else:
-                new_page = _with_retry(
-                    client.create_page,
-                    {"database_id": MASTER_DB_ID},
-                    master_props,
-                )
-                new_id = new_page["id"]
-                mappings[src_id] = {"master_id": new_id, "db": source_db_id}
-                client.write_backlink(src_id, new_id, backlink_field)
-                new_tasks.append({"master_id": new_id,
-                                  "project_id": project_page_id,
-                                  "task_name": task_name})
+            # ── Phase 2: Work Session ──────────────────────────────────────────
+            ws_props: dict = {
+                "Session Name": p_title(task_name),
+                "Task":         {"relation": [{"id": master_id}]},
+                "Project":      {"relation": [{"id": project_page_id}]},
+            }
+            if work_type:
+                ws_props["Work Type"] = p_select(work_type)
+
+            if not ws_id:
+                r = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, ws_props)
+                ws_id = r["id"]
+                new_tasks.append({
+                    "name":   task_name,
+                    "ws_url": f"https://app.notion.com/p/{ws_id.replace('-', '')}",
+                })
                 created += 1
                 if emit:
                     emit({"type": "task", "task": task_name, "action": "created"})
+            elif old_fp != fp:
+                client.patch_page(ws_id, {"properties": ws_props}).raise_for_status()
+                updated += 1
+                if emit:
+                    emit({"type": "task", "task": task_name, "action": "updated"})
+            else:
+                skipped += 1
+                if emit:
+                    emit({"type": "task", "task": task_name, "action": "skipped"})
+                # Still update master_id in case it was missing before rebuild
+                if not existing.get("master_id"):
+                    mappings[src_id] = {**existing, "master_id": master_id}
+                continue
+
+            # ── Update mappings ────────────────────────────────────────────────
+            mappings[src_id] = {
+                "master_id":   master_id,
+                "ws_id":       ws_id,
+                "fp":          fp,
+                "name":        task_name,
+                "planned_end": planned_end or "",
+                "priority":    priority or "",
+                "work_type":   work_type or "",
+                "project_id":  project_page_id,
+                "project_name":project_name,
+                "source_db_id":source_db_id,
+            }
 
         except Exception as e:
             errors.append(f"'{task_name}': {e}")
             if emit:
-                emit({"type": "task", "task": task_name,
-                      "action": "error", "detail": str(e)})
+                emit({"type": "task", "task": task_name, "action": "error", "error": str(e)})
 
-    regenerate_focus_cache(client)
     return {
-        "created": created, "updated": updated,
-        "skipped": skipped, "deleted": deleted,
-        "errors": errors, "new_tasks": new_tasks,
-        "skipped_tasks": skipped_tasks,
+        "created": created, "updated": updated, "skipped": skipped, "deleted": deleted,
+        "errors": errors, "new_tasks": new_tasks, "skipped_tasks": skipped_tasks,
         "current_src_ids": current_src_ids,
-    }
-
-
-# ── Work Sessions deduplication ───────────────────────────────────────────────
-def deduplicate_work_sessions_global(client: NotionClient) -> dict:
-    """
-    Two-phase deduplication.
-
-    Phase 1 — Deduplicate Master WBS Tasks (same name + project appearing twice).
-      Keep the entry in the mappings file (or most-recently-edited), archive rest.
-      Re-link Work Sessions from archived duplicates to the survivor.
-
-    Phase 2 — Deduplicate Work Sessions per master task.
-      Dated sessions (real work) → keep all, archive empty ones.
-      All empty → keep most-recently-edited, archive rest.
-
-    Returns summary dict.
-    """
-    errors:           list[str]  = []
-    updated_mappings: dict       = {}
-
-    # Phase 1: Deduplicate Master WBS Tasks
-    all_master = client.query_db(MASTER_DB_ID)
-    mappings   = load_mappings()
-    tracked_master_ids = {
-        v["master_id"] for v in mappings.values() if isinstance(v, dict)
-    }
-
-    master_groups: dict[tuple, list] = {}
-    for page in all_master:
-        name    = _get_page_title(page)
-        proj_id = _get_project_id_from_page(page)
-        if not name or not proj_id:
-            continue
-        key = (proj_id, name.lower())
-        master_groups.setdefault(key, []).append(page)
-
-    master_dupes_archived = 0
-    all_ws   = client.query_db(WORK_SESSIONS_DB_ID)
-    ws_by_master: dict[str, list] = {}
-    no_task_ids: list[str] = []
-    for ws in all_ws:
-        mid = _get_task_master_id(ws)
-        if mid:
-            ws_by_master.setdefault(mid, []).append(ws)
-        else:
-            no_task_ids.append(ws["id"])
-
-    for key, pages in master_groups.items():
-        if len(pages) == 1:
-            continue
-
-        def score(p):
-            in_mappings = 1 if p["id"] in tracked_master_ids else 0
-            has_ws      = 1 if p["id"] in ws_by_master else 0
-            return (in_mappings, has_ws, p.get("last_edited_time", ""))
-
-        pages_sorted = sorted(pages, key=score, reverse=True)
-        survivor     = pages_sorted[0]
-        duplicates   = pages_sorted[1:]
-
-        for dup in duplicates:
-            dup_id = dup["id"]
-            for ws in ws_by_master.get(dup_id, []):
-                try:
-                    client.patch_page(
-                        ws["id"],
-                        {"properties": {"Task": {"relation": [{"id": survivor["id"]}]}}},
-                    )
-                    ws_by_master.setdefault(survivor["id"], []).append(ws)
-                except Exception as e:
-                    errors.append(f"Re-link WS {ws['id'][:8]} to survivor: {e}")
-            ws_by_master.pop(dup_id, None)
-            if _archive_page(client, dup_id, errors):
-                master_dupes_archived += 1
-
-    # Phase 2: Deduplicate Work Sessions per master task
-    ws_archived = kept = 0
-
-    for master_id, sessions in ws_by_master.items():
-        with_date    = [s for s in sessions if _ws_has_date(s)]
-        without_date = [s for s in sessions if not _ws_has_date(s)]
-
-        if len(sessions) == 1:
-            kept += 1
-            updated_mappings[master_id] = sessions[0]["id"]
-            continue
-
-        if with_date:
-            to_keep    = with_date
-            to_archive = without_date
-        else:
-            by_time    = sorted(sessions,
-                                key=lambda s: s.get("last_edited_time", ""),
-                                reverse=True)
-            to_keep    = by_time[:1]
-            to_archive = by_time[1:]
-
-        kept += len(to_keep)
-        updated_mappings[master_id] = to_keep[0]["id"]
-
-        for ws in to_archive:
-            if not _ws_has_date(ws):
-                if _archive_page(client, ws["id"], errors):
-                    ws_archived += 1
-
-    return {
-        "scanned":               len(all_ws),
-        "master_dupes_archived": master_dupes_archived,
-        "ws_archived":           ws_archived,
-        "kept":                  kept,
-        "no_task_sessions":      len(no_task_ids),
-        "updated_mappings":      updated_mappings,
-        "errors":                errors,
     }

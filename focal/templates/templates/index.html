@@ -574,9 +574,12 @@
       <div class="field-group" style="margin-bottom:10px;">
         <label>Status <span style="font-weight:400;color:#888;">(optional)</span></label>
         <select id="qs-log-status" style="font-size:13px;">
-          <option value="">— leave blank (still in progress) —</option>
-          <option value="Session Done">🔵 Session Done — continue later (auto-creates next session)</option>
-          <option value="Completed">✅ Task Completed — mark entire task as done</option>
+          <option value="">— leave blank —</option>
+          <option value="Not Started">Not Started</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+          <option value="Blocked">Blocked</option>
+          <option value="On Hold">On Hold</option>
         </select>
       </div>
 
@@ -594,24 +597,6 @@
       <div id="qs-log-result" style="display:none;margin-top:10px;font-size:13px;">
         <div id="qs-log-result-ok" style="display:none;color:#276749;font-weight:600;"></div>
         <div id="qs-log-result-err" style="display:none;color:#e53e3e;"></div>
-      </div>
-    </div>
-
-    <!-- Selected-task banner — shown when user loads an existing task from the list above -->
-    <div id="qs-selected-banner" style="display:none;background:#ebf8ff;border:1px solid #bee3f8;
-         border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-        <span style="color:#2b6cb0;">You are going to start a work session for:
-          <strong id="qs-selected-name" style="color:#1a365d;"></strong>
-        </span>
-        <span style="white-space:nowrap;flex-shrink:0;color:#718096;">
-          Cancel this selection?
-          <button onclick="clearTaskSelection()"
-                  style="margin-left:6px;padding:3px 10px;font-size:12px;cursor:pointer;
-                         background:#fff;border:1px solid #cbd5e0;border-radius:4px;color:#4a5568;">
-            Yes
-          </button>
-        </span>
       </div>
     </div>
 
@@ -744,9 +729,11 @@
       <label>Status</label>
       <select id="qs-session-status" style="font-size:13px;">
         <option value="">— leave blank —</option>
+        <option value="Not Started">Not Started</option>
         <option value="In Progress">In Progress</option>
-        <option value="Session Done">Session Done</option>
         <option value="Completed">Completed</option>
+        <option value="Blocked">Blocked</option>
+        <option value="On Hold">On Hold</option>
       </select>
     </div>
 
@@ -763,15 +750,11 @@
 
   <div id="qs-result" style="display:none;" class="card">
     <div id="qs-result-ok" style="display:none;">
-      <p id="qs-result-ok-msg" style="font-size:14px;font-weight:600;color:#38a169;margin-bottom:12px;">✓ Task created</p>
+      <p style="font-size:14px;font-weight:600;color:#38a169;margin-bottom:12px;">✓ Task created in all three places</p>
       <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
         <a id="qs-link-wbs"    href="#" target="_blank">📋 Open in Project WBS →</a>
         <a id="qs-link-master" href="#" target="_blank">📋 Open in Master WBS Tasks →</a>
         <a id="qs-link-ws"     href="#" target="_blank">⏱️ Open Work Session →</a>
-      </div>
-      <div id="qs-continuation-banner" style="display:none;margin-top:12px;padding:10px 12px;background:#fefcbf;border:1px solid #f6e05e;border-radius:6px;font-size:13px;">
-        ↩ Session marked done — continuation session created:
-        <a id="qs-continuation-link" href="#" target="_blank" style="font-weight:600;margin-left:4px;">open →</a>
       </div>
       <p style="font-size:12px;color:#888;margin-top:10px;">
         You can set Session End directly in the form, or update it later in Notion.
@@ -1976,115 +1959,38 @@ async function checkExistingTasks() {
             : '<span style="color:#a0aec0;">No sessions yet</span>'}
         </div>
       </div>
+      <button class="btn btn-ghost"
+              style="font-size:12px;white-space:nowrap;flex-shrink:0;padding:5px 10px;"
+              onclick="selectExistingTask(
+                ${JSON.stringify(t.id)},
+                ${JSON.stringify(t.name)},
+                ${JSON.stringify(t.url)}
+              )">➕ Log Session</button>
     `;
-
-    // Build the Load button via DOM — avoids double-quote escaping issues with inline onclick
-    const loadBtn = document.createElement("button");
-    loadBtn.className   = "btn btn-primary";
-    loadBtn.style.cssText = "font-size:12px;white-space:nowrap;flex-shrink:0;padding:5px 10px;";
-    loadBtn.textContent = "↩ Load";
-    loadBtn.addEventListener("click", () => selectExistingTask(
-      t.id, t.name, t.url,
-      t.priority || "Normal",
-      t.work_type || "",
-      t.planned_end || ""
-    ));
-    card.appendChild(loadBtn);
-
     list.appendChild(card);
   }
 }
 
-function selectExistingTask(taskId, taskName, taskUrl, priority, workType, plannedEnd) {
+function selectExistingTask(taskId, taskName, taskUrl) {
   window._qsSelectedTask = {id: taskId, name: taskName, url: taskUrl};
 
-  // Show selected-task banner
-  document.getElementById("qs-selected-name").textContent = taskName;
-  document.getElementById("qs-selected-banner").style.display = "block";
+  document.getElementById("qs-log-task-name").textContent = taskName;
+  document.getElementById("qs-log-task-link").href        = taskUrl;
+  document.getElementById("qs-log-start").value           = "";
+  document.getElementById("qs-log-end").value             = "";
+  document.getElementById("qs-log-status").value          = "";
+  document.getElementById("qs-log-comment").value         = "";
+  document.getElementById("qs-log-result").style.display      = "none";
+  document.getElementById("qs-log-result-ok").style.display   = "none";
+  document.getElementById("qs-log-result-err").style.display  = "none";
+  document.getElementById("qs-log-panel").style.display       = "block";
 
-  // Pre-fill main form fields (read-only feel for task name)
-  const taskNameEl = document.getElementById("qs-task-name");
-  taskNameEl.value    = taskName;
-  taskNameEl.readOnly = true;
-  taskNameEl.style.background = "#f7fafc";
-  taskNameEl.style.color      = "#4a5568";
-
-  // Pre-fill priority
-  const priorityEl = document.getElementById("qs-priority");
-  if (priority && priorityEl) {
-    for (const opt of priorityEl.options) {
-      if (opt.value === priority) { priorityEl.value = priority; break; }
-    }
-  }
-
-  // Pre-fill work type
-  const workTypeEl = document.getElementById("qs-work-type");
-  if (workType && workTypeEl) {
-    for (const opt of workTypeEl.options) {
-      if (opt.value === workType) { workTypeEl.value = workType; break; }
-    }
-  }
-
-  // Pre-fill due date
-  if (plannedEnd) {
-    document.getElementById("qs-due-date").value = plannedEnd;
-  }
-
-  // Switch button label
-  const btn = document.getElementById("qs-btn");
-  btn.innerHTML = "⏱️ Log Session";
-
-  // Clear session time fields so user fills them fresh
-  document.getElementById("qs-start").value          = "";
-  document.getElementById("qs-end").value            = "";
-  document.getElementById("qs-session-status").value = "";
-  document.getElementById("qs-comment").value        = "";
-
-  // Scroll to form
-  document.getElementById("qs-task-name").scrollIntoView({behavior: "smooth", block: "nearest"});
+  document.getElementById("qs-log-panel").scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
-function resetQsForm() {
-  // Task identity fields
-  const taskNameEl = document.getElementById("qs-task-name");
-  taskNameEl.value        = "";
-  taskNameEl.readOnly     = false;
-  taskNameEl.style.background = "";
-  taskNameEl.style.color      = "";
-
-  // Task metadata fields
-  document.getElementById("qs-priority").value  = "Normal";
-  document.getElementById("qs-work-type").value = "";
-  document.getElementById("qs-due-date").value  = "";
-
-  // Category
-  const catSel = document.getElementById("qs-category");
-  const catNew = document.getElementById("qs-category-new");
-  if (catSel) catSel.value = "";
-  if (catNew) { catNew.value = ""; catNew.style.display = "none"; }
-
-  // Student name + phase (Dissertation Mentoring)
-  const studentSel = document.getElementById("qs-student");
-  const phaseSel   = document.getElementById("qs-phase");
-  if (studentSel) studentSel.value = "";
-  if (phaseSel)   phaseSel.value   = "";
-
-  // Session time fields
-  document.getElementById("qs-start").value          = "";
-  document.getElementById("qs-end").value            = "";
-  document.getElementById("qs-session-status").value = "";
-  document.getElementById("qs-comment").value        = "";
-
-  // Banner + selection state
+function cancelLogSession() {
   window._qsSelectedTask = null;
-  document.getElementById("qs-selected-banner").style.display = "none";
-
-  // Button label
-  document.getElementById("qs-btn").innerHTML = "⚡ Add Task &amp; Start Session";
-}
-
-function clearTaskSelection() {
-  resetQsForm();
+  document.getElementById("qs-log-panel").style.display = "none";
 }
 
 function setQsLogNow() {
@@ -2154,25 +2060,10 @@ async function runLogSession() {
     document.getElementById("qs-log-result-err").textContent   = "✗ " + res.error;
   } else {
     document.getElementById("qs-log-result-ok").style.display = "block";
-    const status = document.getElementById("qs-log-status").value;
-    let msg = "";
-    if (status === "Completed") {
-      msg = `✅ Task marked complete! <a href="${escHtml(res.ws_url)}" target="_blank"
-               style="color:#276749;font-weight:600;">Open Work Session →</a>
-             <br><span style="font-size:11px;color:#555;">Master DB Auto Status will update shortly.</span>`;
-    } else if (status === "Session Done" && res.continuation_ws_url) {
-      msg = `🔵 Session logged. Next session created: <strong>${escHtml(res.continuation_ws_name)}</strong>
-             <br><a href="${escHtml(res.ws_url)}" target="_blank"
-               style="color:#276749;font-weight:600;">Open this session →</a>
-             &nbsp;·&nbsp;
-             <a href="${escHtml(res.continuation_ws_url)}" target="_blank"
-               style="color:#2b6cb0;font-weight:600;">Open next session →</a>`;
-    } else {
-      msg = `✓ Session logged! <a href="${escHtml(res.ws_url)}" target="_blank"
-               style="color:#276749;font-weight:600;">Open Work Session →</a>`;
-    }
-    document.getElementById("qs-log-result-ok").innerHTML = msg;
-    // Clear form for next log
+    document.getElementById("qs-log-result-ok").innerHTML     =
+      `✓ Session logged! <a href="${escHtml(res.ws_url)}" target="_blank"
+         style="color:#276749;font-weight:600;">Open Work Session →</a>`;
+    // Clear form for potential next session log
     document.getElementById("qs-log-start").value   = "";
     document.getElementById("qs-log-end").value     = "";
     document.getElementById("qs-log-status").value  = "";
@@ -2429,11 +2320,8 @@ async function runQuickAdd() {
   if (!src) { alert("Source not found — go to Sources tab and save configuration."); return; }
 
   const btn = document.getElementById("qs-btn");
-  const isLogMode = !!window._qsSelectedTask;
   btn.disabled = true;
-  btn.innerHTML = isLogMode
-    ? '<span class="spinner"></span> Logging…'
-    : '<span class="spinner"></span> Creating…';
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
 
   document.getElementById("qs-result").style.display = "none";
   document.getElementById("qs-result-ok").style.display  = "none";
@@ -2459,60 +2347,42 @@ async function runQuickAdd() {
   const sessionStatus  = (document.getElementById("qs-session-status").value || "").trim();
   const sessionComment = (document.getElementById("qs-comment").value || "").trim();
 
-  let res;
-  if (isLogMode) {
-    // ── Log session against an existing task ──────────────────────────────────
-    res = await api("POST", "/api/log-session", {
-      token:           state.token,
-      ws_id:           window._qsSelectedTask.id,
-      project_id:      src.project_id,
-      task_name:       window._qsSelectedTask.name,
-      session_start:   sessionStart,
-      session_end:     sessionEnd,
-      session_status:  sessionStatus,
-      session_comment: sessionComment,
-    });
-  } else {
-    // ── Create a new task + work session ─────────────────────────────────────
-    res = await api("POST", "/api/quick-add", {
-      token:           state.token,
-      source_db_id:    dbId,
-      project_id:      src.project_id,
-      task_name:       taskName,
-      task_name_field: src.field_map?.task_name || "Task",
-      backlink_field:  src.backlink_field || "Master WBS",
-      session_start:   sessionStart,
-      session_end:     sessionEnd,
-      session_status:  sessionStatus,
-      session_comment: sessionComment,
-      due_date:        dueDate,
-      priority:        priority,
-      work_type:       workType,
-      planned_end_field: src.field_map?.planned_end || "",
-      priority_field:    src.field_map?.priority    || "",
-      work_type_field:   src.field_map?.work_type   || "",
-      category:          category,
-      category_field:    src.field_map?.category    || "",
-      student_name:      studentName,
-      student_name_field: src.field_map?.student_name || "",
-      current_phase:      currentPhase,
-      current_phase_field: src.field_map?.current_phase || "",
-      degree:             profile.degree  || "",
-      degree_field:       src.field_map?.degree   || "",
-      my_role:            profile.my_role || "",
-      my_role_field:      src.field_map?.my_role  || "",
-      chair:              profile.chair   || "",
-      chair_field:        src.field_map?.chair    || "",
-      program:            profile.program || "",
-      program_field:      src.field_map?.program  || "",
-      update_profile:     updateProfile,
-    });
-  }
+  const res = await api("POST", "/api/quick-add", {
+    token:           state.token,
+    source_db_id:    dbId,
+    project_id:      src.project_id,
+    task_name:       taskName,
+    task_name_field: src.field_map?.task_name || "Task",
+    backlink_field:  src.backlink_field || "Master WBS",
+    session_start:   sessionStart,
+    session_end:     sessionEnd,
+    session_status:  sessionStatus,
+    session_comment: sessionComment,
+    due_date:        dueDate,
+    priority:        priority,
+    work_type:       workType,
+    planned_end_field: src.field_map?.planned_end || "",
+    priority_field:    src.field_map?.priority    || "",
+    work_type_field:   src.field_map?.work_type   || "",
+    category:          category,
+    category_field:    src.field_map?.category    || "",
+    student_name:      studentName,
+    student_name_field: src.field_map?.student_name || "",
+    current_phase:      currentPhase,
+    current_phase_field: src.field_map?.current_phase || "",
+    degree:             profile.degree  || "",
+    degree_field:       src.field_map?.degree   || "",
+    my_role:            profile.my_role || "",
+    my_role_field:      src.field_map?.my_role  || "",
+    chair:              profile.chair   || "",
+    chair_field:        src.field_map?.chair    || "",
+    program:            profile.program || "",
+    program_field:      src.field_map?.program  || "",
+    update_profile:     updateProfile,
+  });
 
   btn.disabled = false;
-  btn.innerHTML = isLogMode
-    ? "⏱️ Log Session"
-    : "⚡ Add Task &amp; Start Session";
+  btn.innerHTML = "⚡ Add Task &amp; Start Session";
   document.getElementById("qs-result").style.display = "block";
 
   if (res.error) {
@@ -2520,50 +2390,24 @@ async function runQuickAdd() {
     document.getElementById("qs-result-err").textContent    = "✗ " + res.error;
   } else {
     document.getElementById("qs-result-ok").style.display   = "block";
-
-    // Capture result URLs before resetQsForm() clears _qsSelectedTask
-    const savedTaskUrl  = window._qsSelectedTask?.url || "#";
-    const savedWbsUrl   = res.wbs_url    || "#";
-    const savedMasterUrl = res.master_url || "#";
-    const savedWsUrl    = res.ws_url     || "#";
-
-    // Full form reset — clears all fields consistently for both modes
-    resetQsForm();
-
-    if (isLogMode) {
-      document.getElementById("qs-result-ok-msg").textContent = "✓ Session logged";
-      document.getElementById("qs-link-wbs").href             = savedTaskUrl;
-      document.getElementById("qs-link-master").href          = "#";
-      document.getElementById("qs-link-master").style.display = "none";
-      document.getElementById("qs-link-ws").href              = savedWsUrl;
-
-      // Show continuation link if Session Done
-      const contBanner = document.getElementById("qs-continuation-banner");
-      if (res.continuation_ws_url && contBanner) {
-        contBanner.style.display = "block";
-        const contLink = document.getElementById("qs-continuation-link");
-        if (contLink) {
-          contLink.href        = res.continuation_ws_url;
-          contLink.textContent = res.continuation_ws_name || "next session";
-        }
-      } else if (contBanner) {
-        contBanner.style.display = "none";
-      }
-    } else {
-      document.getElementById("qs-result-ok-msg").textContent = "✓ Task created in all three places";
-      document.getElementById("qs-link-master").style.display = "";
-      document.getElementById("qs-link-wbs").href             = savedWbsUrl;
-      document.getElementById("qs-link-master").href          = savedMasterUrl;
-      document.getElementById("qs-link-ws").href              = savedWsUrl;
-
-      // Sync student profile cache if profile was updated
-      if (updateProfile && studentName && currentPhase) {
-        const idx = state.students.findIndex(s => s.student_name === studentName);
-        if (idx !== -1) state.students[idx].current_phase = currentPhase;
-      }
-      // Reset update-profile checkbox
-      if (updateProfileEl) updateProfileEl.checked = false;
+    document.getElementById("qs-link-wbs").href    = res.wbs_url    || "#";
+    document.getElementById("qs-link-master").href = res.master_url || "#";
+    document.getElementById("qs-link-ws").href     = res.ws_url     || "#";
+    document.getElementById("qs-task-name").value  = "";  // clear for next entry
+    // Reset category to "no category" (keep dropdown open for next quick entry)
+    if (document.getElementById("qs-category").value === "__new__") {
+      document.getElementById("qs-category").value = "";
+      document.getElementById("qs-category-new").style.display = "none";
+      document.getElementById("qs-category-new").value = "";
     }
+    // If profile was updated, sync local state.students cache so next lookup is current
+    if (updateProfile && studentName && currentPhase) {
+      const idx = state.students.findIndex(s => s.student_name === studentName);
+      if (idx !== -1) state.students[idx].current_phase = currentPhase;
+    }
+    // Reset update-profile checkbox (don't propagate to next task entry)
+    if (updateProfileEl) updateProfileEl.checked = false;
+    // Keep student selected — likely adding multiple tasks for the same student
   }
 }
 

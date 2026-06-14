@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focal — Design Document</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #21253a;
+    --border: #2e3248; --accent: #6c8ef7; --accent2: #a78bfa;
+    --accent3: #34d399; --accent4: #f59e0b; --accent5: #f87171;
+    --text: #e2e8f0; --muted: #8892a4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px 60px; }
+  .hero { padding: 36px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+  .hero-tag { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .hero h1 { font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .hero p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .tabs { display: flex; gap: 4px; background: var(--surface); border-radius: 10px; padding: 4px; margin-bottom: 28px; position: sticky; top: 8px; z-index: 10; }
+  .tab { flex: 1; text-align: center; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 7px; color: var(--muted); transition: all .15s; border: none; background: none; }
+  .tab.active { background: var(--surface2); color: var(--text); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .section { display: none; animation: fadein .2s ease; }
+  .section.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+  .card h3 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+  .card p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .sec-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .arch { display: flex; flex-direction: column; gap: 0; }
+  .arch-layer { display: flex; align-items: stretch; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .arch-connector { display: flex; align-items: center; justify-content: center; padding: 6px 0; color: var(--muted); font-size: 11px; gap: 8px; letter-spacing: .05em; }
+  .arch-connector::before, .arch-connector::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .layer-num { width: 28px; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-right: 6px; align-self: flex-start; }
+  .layer-body { flex: 1; }
+  .layer-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .layer-desc { font-size: 12px; color: var(--muted); }
+  .layer-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px; margin-top: 8px; }
+  .l1 { border-left: 3px solid var(--accent3); } .l2 { border-left: 3px solid var(--accent); } .l3 { border-left: 3px solid var(--accent2); }
+  .n1 { background: rgba(52,211,153,.15); color: var(--accent3); } .n2 { background: rgba(108,142,247,.15); color: var(--accent); } .n3 { background: rgba(167,139,250,.15); color: var(--accent2); }
+  .badge-n1 { background: rgba(52,211,153,.12); color: var(--accent3); } .badge-n2 { background: rgba(108,142,247,.12); color: var(--accent); } .badge-n3 { background: rgba(167,139,250,.12); color: var(--accent2); }
+  .flow { display: flex; flex-direction: column; }
+  .flow-step { display: flex; gap: 16px; align-items: flex-start; }
+  .flow-line { display: flex; flex-direction: column; align-items: center; }
+  .flow-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-vline { width: 2px; flex: 1; min-height: 24px; background: var(--border); }
+  .flow-content { flex: 1; padding-bottom: 24px; padding-top: 4px; }
+  .flow-content h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .flow-content p { font-size: 12px; color: var(--muted); }
+  .flow-content code { font-family: 'SF Mono', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; color: var(--accent4); }
+  .proj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .proj-table th { text-align: left; padding: 8px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600; }
+  .proj-table td { padding: 10px 12px; border-bottom: 1px solid rgba(46,50,72,.6); vertical-align: top; }
+  .proj-table tr:last-child td { border-bottom: none; }
+  .proj-table tr:hover td { background: rgba(108,142,247,.04); }
+  .cat-pill { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 100px; }
+  .cat-teach { background: rgba(52,211,153,.12); color: var(--accent3); }
+  .cat-research { background: rgba(108,142,247,.12); color: var(--accent); }
+  .cat-design { background: rgba(245,158,11,.12); color: var(--accent4); }
+  .cat-prog { background: rgba(248,113,113,.12); color: var(--accent5); }
+  .cat-svc { background: rgba(167,139,250,.12); color: var(--accent2); }
+  .db-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .db-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .db-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .db-icon { font-size: 18px; }
+  .db-name { font-size: 13px; font-weight: 700; }
+  .db-id { font-family: 'SF Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+  .db-field { display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(46,50,72,.4); }
+  .db-field:last-child { border-bottom: none; }
+  .db-field-name { color: var(--muted); } .db-field-val { color: var(--text); font-weight: 500; }
+  .config-block { background: var(--surface2); border-radius: 8px; padding: 14px 16px; font-family: 'SF Mono', monospace; font-size: 11px; line-height: 1.8; overflow-x: auto; }
+  .cfg-key { color: #6c8ef7; } .cfg-val { color: #a78bfa; } .cfg-str { color: #34d399; } .cfg-bool { color: #f59e0b; } .cfg-comment { color: var(--muted); font-style: italic; }
+  .rule-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .rule-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 13px; }
+  .rule-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .rule-text { color: var(--muted); }
+  .rule-text strong { color: var(--text); }
+  .status-chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sc-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 12px; }
+  .sc-box strong { display: block; font-size: 13px; margin-bottom: 2px; }
+  .sc-box span { color: var(--muted); font-size: 11px; }
+  .sc-arrow { color: var(--muted); font-size: 18px; }
+  .warn { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.2); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--accent4); display: flex; gap: 10px; align-items: flex-start; }
+  .footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-tag">Foundational Design Document &middot; v1.0 &middot; June 2026</div>
+    <h1>Focal — Faculty Project &amp; Workload Hub</h1>
+    <p>Automated project management for a multi-faceted faculty role &mdash; built on Notion + Python/Flask</p>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" onclick="show('arch')">Architecture</button>
+    <button class="tab" onclick="show('flow')">Data Flow</button>
+    <button class="tab" onclick="show('projects')">Projects</button>
+    <button class="tab" onclick="show('databases')">Databases</button>
+    <button class="tab" onclick="show('config')">Config &amp; Rules</button>
+  </div>
+
+  <!-- ARCHITECTURE -->
+  <div class="section active" id="arch">
+    <div class="sec-label">System Overview</div>
+    <div class="card" style="margin-bottom:12px">
+      <p style="margin:0 0 10px"><strong style="color:var(--text)">Problem</strong></p>
+      <p style="margin:0">A faculty role spans simultaneous, structurally different workstreams &mdash; courses, research projects, service roles, admin &mdash; each with its own planning context. Generic PM tools may not accommodate the diverse structure faculty work actually has. Managing projects in separate Notion WBS databases solves that, but creates a new problem: no unified view, no cross-project status, no way to see what actually needs attention this week.</p>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <p style="margin:0 0 10px"><strong style="color:var(--text)">What Focal does</strong></p>
+      <p style="margin:0">It bridges per-project Notion WBS databases into a single consolidated system &mdash; without restructuring how each project is planned. Tasks sync automatically into a Master task list. Work sessions tie actual time logged to specific tasks and projects. Status propagates up automatically once a session is marked complete.</p>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <p style="margin:0 0 10px"><strong style="color:var(--text)">Core features</strong></p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0">
+        <div><strong style="font-size:12px">🔄 Sync</strong><br><span style="font-size:12px;color:var(--muted)">Pulls tasks from all project WBS databases into one Master list; run on demand or on a schedule.</span></div>
+        <div><strong style="font-size:12px">⚡ Quick Start</strong><br><span style="font-size:12px;color:var(--muted)">Single entry point to log a work session or add a task to any project, without navigating to each WBS.</span></div>
+        <div><strong style="font-size:12px">📌 Focus view</strong><br><span style="font-size:12px;color:var(--muted)">Shows what's overdue and due this week, ranked by urgency, across all work areas.</span></div>
+        <div><strong style="font-size:12px">📊 Workload dashboard</strong><br><span style="font-size:12px;color:var(--muted)">Actual hours logged by project and work type over a selected time window.</span></div>
+      </div>
+    </div>
+    <div class="sec-label">Three-Layer Architecture</div>
+    <div class="arch">
+      <div class="arch-layer l1">
+        <div class="layer-num n1">1</div>
+        <div class="layer-body">
+          <div class="layer-name">&#x1F4CB; Project WBS Databases <span style="font-weight:400;font-size:12px;color:var(--muted)">(Planning Portal)</span></div>
+          <div class="layer-desc">One dedicated Notion database per project. Author and edit tasks here &mdash; add rows, set due dates, adjust priorities, track phases. Currently 8 active WBS databases covering all work areas. Lives on each project hub page.</div>
+          <span class="layer-badge badge-n1">User edits here &middot; Source of truth</span>
+        </div>
+      </div>
+      <div class="arch-connector">&darr; Python sync pushes changes</div>
+      <div class="arch-layer l2">
+        <div class="layer-num n2">2</div>
+        <div class="layer-body">
+          <div class="layer-name">&#x1F4CB; Master WBS Tasks <span style="font-weight:400;font-size:12px;color:var(--muted)">(Implementation Tracking)</span></div>
+          <div class="layer-desc">Single aggregated Notion database consolidating tasks from all project WBSes into one canonical list. The Python sync tool writes here &mdash; never edit directly. Powers cross-project views, focus lists, and status rollups.</div>
+          <span class="layer-badge badge-n2">Auto-written by sync tool &middot; Never edit directly</span>
+        </div>
+      </div>
+      <div class="arch-connector">&darr; Sync creates sessions &middot; Status propagates up</div>
+      <div class="arch-layer l3">
+        <div class="layer-num n3">3</div>
+        <div class="layer-body">
+          <div class="layer-name">&#x23F1;&#xFE0F; Work Sessions <span style="font-weight:400;font-size:12px;color:var(--muted)">(Time-Logging Layer)</span></div>
+          <div class="layer-desc">Time log entries linked to both a task (Master WBS) and a project (Projects DB). Created via Quick Start. The Status field on sessions drives the Auto Status formula in Master WBS, which rolls up to Project WBS via relation.</div>
+          <span class="layer-badge badge-n3">Status origin &middot; Drives auto-status chain</span>
+        </div>
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:28px">Status Auto-Propagation Chain</div>
+    <div class="card">
+      <div class="status-chain">
+        <div class="sc-box"><strong>&#x23F1;&#xFE0F; Work Session</strong><span>Status field<br>(set manually)</span></div>
+        <div class="sc-arrow">&rarr;</div>
+        <div class="sc-box"><strong>&#x1F4CB; Master WBS</strong><span>Auto Status<br>(formula &mdash; reads sessions)</span></div>
+        <div class="sc-arrow">&rarr;</div>
+        <div class="sc-box"><strong>&#x1F4CB; Project WBS</strong><span>Auto Status<br>(rollup via relation)</span></div>
+      </div>
+      <p style="margin-top:14px;font-size:12px;">All status propagation is automatic. The only manual input is marking a Work Session as &ldquo;Completed.&rdquo; Note: the <code>Auto Status</code> formula field is not readable via the Notion API (returns opaque URL). For programmatic checks, fetch the Work Sessions relation and inspect their <code>Status</code> fields directly.</p>
+    </div>
+    <div class="sec-label" style="margin-top:16px">Work Areas Covered</div>
+    <div class="grid3">
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F393;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Teaching &amp; Mentoring</div><div style="font-size:11px;color:var(--muted)">Course instruction, student advising, workshop facilitation</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F52C;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Research &amp; Scholarship</div><div style="font-size:11px;color:var(--muted)">Scoping reviews, collaborative papers, team projects</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F3A8;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Instructional Design</div><div style="font-size:11px;color:var(--muted)">Course design &amp; development projects</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F4CA;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Program Management</div><div style="font-size:11px;color:var(--muted)">Reactive PM: advising, inquiries, email responses</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x1F91D;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Professional Services</div><div style="font-size:11px;color:var(--muted)">Service work, external commitments</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:20px;margin-bottom:6px">&#x2699;&#xFE0F;</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Admin &amp; Ops / PD</div><div style="font-size:11px;color:var(--muted)">Administrative tasks, self-learning</div></div>
+    </div>
+  </div>
+
+  <!-- DATA FLOW -->
+  <div class="section" id="flow">
+    <div class="sec-label">Sync Tool</div>
+    <div class="card" style="margin-bottom:20px">
+      <p>Focal (<code>main.py</code>) is a local Flask web app at <strong style="color:var(--text)">localhost:8765</strong>. One-directional bridge: reads from Project WBS databases, writes to Master WBS Tasks and Work Sessions. State is persisted in JSON mapping files for idempotent upserts.</p>
+    </div>
+    <div class="sec-label">Process Flow</div>
+    <div class="flow">
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(52,211,153,.15);color:var(--accent3)">1</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Edit tasks in Project WBS</h4><p>Add/update rows directly in Notion. Set Task name, Due Date, Priority, Notes, Phase/Category. This is the only manual step.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">2</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Run sync tool &rarr; Sync tab &rarr; Sync Now</h4><p>Reads all configured WBS databases via Notion API. Maps columns using <code>field_map</code> in config. Normalizes status/priority values.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">3</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Upsert into Master WBS Tasks</h4><p>Checks <code>focal_mappings.json</code> for existing mapping. New &rarr; CREATE + write backlink. Existing &rarr; UPDATE changed fields only. Status set ONLY on CREATE.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(167,139,250,.15);color:var(--accent2)">4</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Create Work Session (Quick Start)</h4><p>Via Quick Start tab: creates session linked to Master WBS task + Projects DB entry. Mapping persisted in <code>focal_sessions_mappings.json</code>.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(245,158,11,.15);color:var(--accent4)">5</div></div><div class="flow-content"><h4>Status propagates automatically</h4><p>Mark Work Session Status = &ldquo;Completed&rdquo; in Notion &rarr; Master WBS Auto Status formula updates &rarr; Project WBS Auto Status rollup reflects completion.</p></div></div>
+    </div>
+    <div class="sec-label" style="margin-top:4px">Key Sync Behaviors</div>
+    <div class="grid2">
+      <div class="card"><div class="card-title">Idempotent Upserts</div><p>Mapping files track every synced task/session. Re-running sync updates existing records &mdash; never creates duplicates.</p></div>
+      <div class="card"><div class="card-title">One-Directional Only</div><p>Project WBS &rarr; Master WBS. Changes to Master WBS directly are NOT reflected back. Always edit in the source WBS.</p></div>
+      <div class="card"><div class="card-title">Status Protection</div><p>Status is written ONLY on CREATE in Master WBS. Never overwritten on UPDATE &mdash; protects the Auto Status formula from being clobbered.</p></div>
+      <div class="card"><div class="card-title">Value Normalization</div><p>Status and Priority strings normalized on sync: &ldquo;Todo / Not Started&rdquo; &rarr; Not Started &middot; &ldquo;Done / Finished&rdquo; &rarr; Completed &middot; &ldquo;Urgent / Critical&rdquo; &rarr; Urgent.</p></div>
+    </div>
+    <div class="sec-label">State Files</div>
+    <div class="grid3">
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">focal_config.json</div><div style="font-size:11px;color:var(--muted)">Token + all source WBS DB IDs, project mappings, field maps. Edit to add/reconfigure projects.</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px">focal_mappings.json</div><div style="font-size:11px;color:var(--muted)">Source task ID &rarr; Master WBS page ID. ~120 entries. Auto-generated.</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent3);margin-bottom:6px">focal_sessions_mappings.json</div><div style="font-size:11px;color:var(--muted)">Master task &rarr; Work Session page ID. ~241 entries. Auto-generated.</div></div>
+    </div>
+  </div>
+
+  <!-- PROJECTS -->
+  <div class="section" id="projects">
+    <div class="sec-label">Active Projects (8 WBS Databases)</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="proj-table">
+        <thead><tr><th>Project Name</th><th>Category</th><th>WBS DB ID</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>EDG 6648 Summer 2026 Instruction</strong></td><td><span class="cat-pill cat-teach">Teaching</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">001e7ca9&hellip;</td><td style="font-size:11px;color:var(--muted)">Category field</td></tr>
+          <tr><td><strong>EDG 6648 Course Design</strong></td><td><span class="cat-pill cat-design">Design</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">b4f7bdc6&hellip;</td><td style="font-size:11px;color:var(--muted)">Task Type field</td></tr>
+          <tr><td><strong>Beyond the LXD Label Scoping Review</strong></td><td><span class="cat-pill cat-research">Research</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">48cc032e&hellip;</td><td style="font-size:11px;color:var(--muted)">Hub nested under Research Projects DB row</td></tr>
+          <tr><td><strong>AI &amp; PjBL Scoping Review</strong></td><td><span class="cat-pill cat-research">Research</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">8ca11592&hellip;</td><td style="font-size:11px;color:var(--muted)">Phase field; auto_calc_planned_start</td></tr>
+          <tr><td><strong>CS Ed EdD Cohort 2 Summer Workshop 2026</strong></td><td><span class="cat-pill cat-teach">Teaching</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">79345a33&hellip;</td><td style="font-size:11px;color:var(--muted)">Student-facing; under Teaching hub</td></tr>
+          <tr><td><strong>Program Management</strong></td><td><span class="cat-pill cat-prog">Program Mgmt</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">53cdd7a1&hellip;</td><td style="font-size:11px;color:var(--muted)">Reactive tasks; flat hub structure</td></tr>
+          <tr><td><strong>Professional Services</strong></td><td><span class="cat-pill cat-svc">Service</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">8d83590f&hellip;</td><td style="font-size:11px;color:var(--muted)">Level + Org/Division fields</td></tr>
+          <tr><td><strong>CS+AI Competency Job Posts Analysis</strong></td><td><span class="cat-pill cat-research">Research</span></td><td style="font-family:monospace;font-size:10px;color:var(--muted)">cd502046&hellip;</td><td style="font-size:11px;color:var(--muted)">Type field; Start Date field</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="sec-label" style="margin-top:28px">Hub Page Standard Structure</div>
+    <div class="card">
+      <p style="margin-bottom:12px">Every project hub page follows this required structure:</p>
+      <div class="config-block">
+<span class="cfg-comment"># Project Hub Page Template</span><br><br>
+&lt;Project title heading&gt;<br>
+&lt;Description / context sections&gt;<br>
+---<br>
+<span class="cfg-key">## &#x1F4CB; WBS</span><br>
+<span class="cfg-comment">  &larr; Embedded WBS database (inline, full-page width)</span><br><br>
+---<br>
+<span class="cfg-key">## &#x23F1;&#xFE0F; Work Sessions</span><br>
+<span class="cfg-comment">  &larr; Inline linked view of Work Sessions DB</span><br>
+<span class="cfg-comment">  &larr; Filter: Project = this project (set manually once)</span>
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:16px">Project Placement Rules</div>
+    <ul class="rule-list">
+      <li><span class="rule-icon">&#x1F4C1;</span><span class="rule-text"><strong>Always create a &#x1F4C1; Projects DB entry</strong> for every new project &mdash; this is what Work Sessions &ldquo;Project&rdquo; relation links to. Tagged by category.</span></li>
+      <li><span class="rule-icon">&#x1F52C;</span><span class="rule-text"><strong>Research projects get two records:</strong> a &#x1F4C1; Projects DB entry (for time logging) AND a &#x1F38D; Research Projects DB entry (for research tracking). Hub page nests under the Research Projects DB row.</span></li>
+      <li><span class="rule-icon">&#x1F4CD;</span><span class="rule-text"><strong>Hub page placement is separate from DB entry.</strong> Place hub pages nested under their section&rsquo;s DB row in the sidebar hierarchy.</span></li>
+    </ul>
+  </div>
+
+  <!-- DATABASES -->
+  <div class="section" id="databases">
+    <div class="sec-label">Global Tracking Databases</div>
+    <div class="db-grid">
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x1F4C1;</span><div><div class="db-name">Projects DB</div><div class="db-id">Page: 01705bad&hellip; &middot; Col: 80ee95ce&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Relation target for Work Sessions</span></div><div class="db-field"><span class="db-field-name">Key field</span><span class="db-field-val">Category (Teaching, Research&hellip;)</span></div><div class="db-field"><span class="db-field-name">Count</span><span class="db-field-val">One entry per active project</span></div></div>
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x1F4CB;</span><div><div class="db-name">Master WBS Tasks</div><div class="db-id">DB: 2de3b2f3&hellip; &middot; Col: 94fa9ee4&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Consolidated task tracking</span></div><div class="db-field"><span class="db-field-name">Key formula</span><span class="db-field-val">Auto Status (reads Work Sessions)</span></div><div class="db-field"><span class="db-field-name">Count</span><span class="db-field-val">~120 task entries</span></div></div>
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x23F1;&#xFE0F;</span><div><div class="db-name">Work Sessions</div><div class="db-id">Page: 308c193f&hellip; &middot; Col: b3982f2e&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Time-logging layer</span></div><div class="db-field"><span class="db-field-name">Relations</span><span class="db-field-val">Project &rarr; &#x1F4C1; Projects DB &middot; Task &rarr; Master WBS</span></div><div class="db-field"><span class="db-field-name">Count</span><span class="db-field-val">~241 session entries</span></div></div>
+      <div class="db-card"><div class="db-card-head"><span class="db-icon">&#x1F38D;</span><div><div class="db-name">Research Projects DB</div><div class="db-id">Page: 08ca3525&hellip; &middot; Col: 8608ff79&hellip;</div></div></div><div class="db-field"><span class="db-field-name">Purpose</span><span class="db-field-val">Research-specific tracking</span></div><div class="db-field"><span class="db-field-name">Schema</span><span class="db-field-val">Stages, Status, Team Members, Lead, Due</span></div><div class="db-field"><span class="db-field-name">Location</span><span class="db-field-val">Research &amp; Scholarship hub</span></div></div>
+    </div>
+    <div class="sec-label" style="margin-top:28px">Known API Limitation</div>
+    <div class="warn"><span style="flex-shrink:0;font-size:15px">&#x26A0;&#xFE0F;</span><div><strong>Auto Status formula not readable via API.</strong> The Notion MCP returns formula values as opaque <code style="font-family:monospace;font-size:10px;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px;">formulaResult://&hellip;</code> URLs. To check task completion programmatically: fetch the task&rsquo;s linked Work Sessions, then check each session&rsquo;s <code style="font-family:monospace;font-size:10px;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px;">Status</code> field. A task is done when all non-deleted sessions are &ldquo;Completed.&rdquo;</div></div>
+  </div>
+
+  <!-- CONFIG & RULES -->
+  <div class="section" id="config">
+    <div class="sec-label">Config Schema &mdash; focal_config.json</div>
+    <div class="card">
+      <p style="margin-bottom:14px;font-size:12px">One entry per source WBS database. The <code>sources</code> key is a dict keyed by WBS Notion DB ID (UUID with hyphens).</p>
+      <div class="config-block">
+<span class="cfg-key">"sources"</span>: {<br>
+&nbsp;&nbsp;<span class="cfg-str">"&lt;wbs-db-uuid&gt;"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"db_title"</span>: <span class="cfg-str">"WBS &mdash; Project Name"</span>, <span class="cfg-comment">// display name</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"project_id"</span>: <span class="cfg-str">"&lt;projects-db-entry-uuid&gt;"</span>, <span class="cfg-comment">// &#x1F4C1; Projects DB entry ID</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"backlink_field"</span>: <span class="cfg-str">"Master WBS"</span>, <span class="cfg-comment">// relation column in Project WBS</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"auto_calc_planned_start"</span>: <span class="cfg-bool">true</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"field_map"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"task_name"</span>: <span class="cfg-str">"Task"</span>, <span class="cfg-comment">// REQUIRED</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"priority"</span>: <span class="cfg-str">"Priority"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"planned_end"</span>: <span class="cfg-str">"Due Date"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"notes"</span>: <span class="cfg-str">"Notes"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cfg-key">"category"</span>: <span class="cfg-str">"Phase"</span> <span class="cfg-comment">// "Category", "Phase", etc.</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:20px">Design Rules &amp; Invariants</div>
+    <ul class="rule-list">
+      <li><span class="rule-icon">&#x1F512;</span><span class="rule-text"><strong>Never edit Master WBS Tasks directly.</strong> All changes must originate in a Project WBS and flow through the sync tool.</span></li>
+      <li><span class="rule-icon">&#x1F501;</span><span class="rule-text"><strong>Status written only on CREATE.</strong> The sync tool never overwrites Status on UPDATE &mdash; intentional to protect the Auto Status formula chain.</span></li>
+      <li><span class="rule-icon">&#x1F5C2;&#xFE0F;</span><span class="rule-text"><strong>Every project needs a &#x1F4C1; Projects DB entry.</strong> This is the anchor for Work Sessions. Without it, sessions cannot be assigned to a project.</span></li>
+      <li><span class="rule-icon">&#x1F517;</span><span class="rule-text"><strong>backlink_field must always be &ldquo;Master WBS&rdquo;.</strong> This relation column links Project WBS rows back to Master WBS Tasks entries. Auto-written by the tool on first sync.</span></li>
+      <li><span class="rule-icon">&#x1F9E9;</span><span class="rule-text"><strong>Config keys must be UUID-with-hyphens format.</strong> e.g. <code style="font-family:monospace;font-size:10px;background:var(--surface2);padding:1px 4px;border-radius:3px;color:var(--accent4)">001e7ca9-a7b8-4180-&hellip;</code>, not the compact form.</span></li>
+      <li><span class="rule-icon">&#x1F6AB;</span><span class="rule-text"><strong>Deleted source tasks are NOT removed from Master WBS.</strong> Preserves historical log integrity.</span></li>
+    </ul>
+    <div class="sec-label" style="margin-top:24px">Running the Tool</div>
+    <div class="card">
+      <div class="config-block">
+<span class="cfg-comment"># From the Notion_Auto_PM folder:</span><br>
+python3 main.py<br><br>
+<span class="cfg-comment"># Opens browser to:</span><br>
+http://localhost:8765<br><br>
+<span class="cfg-comment"># One-time install:</span><br>
+pip3 install flask requests
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Faculty PM System Design Doc &middot; v1.0 &middot; June 2026</div>
+</div>
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

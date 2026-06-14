@@ -1,7 +1,7 @@
 """
 routes/config_routes.py
 ────────────────────────
-Endpoints for token validation, config persistence, and Notion schema discovery.
+Token validation, config persistence, and Notion schema discovery.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from flask import Blueprint, jsonify, request
 from ..config import (
     MASTER_DB_ID,
     PROJECTS_DB_ID,
+    WORK_SESSIONS_DB_ID,
     load_config,
     save_config,
 )
@@ -44,21 +45,27 @@ def api_test_token():
         name   = data.get("name") or data.get("bot", {}).get("owner", {}).get("user", {}).get("name", "")
         return jsonify({"ok": True, "name": name})
     except requests.HTTPError as e:
-        return jsonify({"error": f"Notion API error {e.response.status_code}: {e.response.text}"}), 400
+        return jsonify({"error": f"Notion API {e.response.status_code}: {e.response.text}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 
 @bp.route("/api/discover", methods=["POST"])
 def api_discover():
+    """Discover WBS databases accessible to the integration."""
     token = request.json.get("token", "").strip()
     if not token:
         return jsonify({"error": "No token provided"}), 400
     try:
-        client  = NotionClient(token)
+        client = NotionClient(token)
         all_dbs = client.search_wbs_databases()
-        result  = []
-        skip    = {MASTER_DB_ID.replace("-", ""), PROJECTS_DB_ID.replace("-", "")}
+        # Skip global databases; everything else is a project WBS
+        skip = {
+            MASTER_DB_ID.replace("-", ""),
+            PROJECTS_DB_ID.replace("-", ""),
+            WORK_SESSIONS_DB_ID.replace("-", ""),
+        }
+        result = []
         for db in all_dbs:
             db_id = db["id"].replace("-", "")
             if db_id in skip:
@@ -69,7 +76,7 @@ def api_discover():
         result.sort(key=lambda x: x["title"])
         return jsonify({"databases": result})
     except requests.HTTPError as e:
-        return jsonify({"error": f"Notion API error: {e.response.status_code} — {e.response.text}"}), 400
+        return jsonify({"error": f"Notion API {e.response.status_code}: {e.response.text}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 

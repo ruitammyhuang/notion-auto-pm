@@ -1631,6 +1631,158 @@ def api_quick_add():
         return jsonify({"error": str(e)}), 400
 
 
+# ── Check existing tasks (dedup helper) ───────────────────────────────────────
+
+@app.route("/api/existing-tasks", methods=["POST"])
+def api_existing_tasks():
+    """
+    Return all non-completed tasks in Master WBS Tasks for a given project,
+    along with the count and URLs of their linked Work Sessions.
+
+    Body: {token, project_id}
+    Returns: {tasks: [{id, name, url, status, planned_end, work_sessions: [{id, url, name, start, status}]}]}
+    """
+    body       = request.json or {}
+    token      = body.get("token", "").strip()
+    project_id = body.get("project_id", "").strip()
+
+    if not token or not project_id:
+        return jsonify({"error": "token and project_id are required"}), 400
+
+    try:
+        filter_body = {
+            "and": [
+                {"property": "Project", "relation": {"contains": project_id}},
+                {"property": "Status",  "status":   {"does_not_equal": "Completed"}},
+            ]
+        }
+        master_pages = query_db(token, MASTER_DB_ID, filter_body)
+
+        # Fetch all Work Sessions for this project in one query
+        ws_filter = {"property": "Project", "relation": {"contains": project_id}}
+        ws_pages  = query_db(token, WORK_SESSIONS_DB_ID, ws_filter)
+
+        # Index Work Sessions by master task ID
+        ws_by_task = {}
+        for ws in ws_pages:
+            props    = ws.get("properties", {})
+            task_rel = props.get("Task", {}).get("relation", [])
+            for rel in task_rel:
+                tid = rel["id"].replace("-", "")
+                ws_by_task.setdefault(tid, []).append(ws)
+
+        tasks = []
+        for page in master_pages:
+            props     = page.get("properties", {})
+            task_id   = page["id"].replace("-", "")
+            task_name = "".join(t.get("plain_text","")
+                                for t in props.get("Task Name",{}).get("title", []))
+            status    = extract(props.get("Status", {})) or ""
+            pe_raw    = props.get("Planned End", {}).get("date") or {}
+            planned_end = pe_raw.get("start", "") if isinstance(pe_raw, dict) else ""
+
+            sessions_info = []
+            for ws in ws_by_task.get(task_id, []):
+                wp = ws.get("properties", {})
+                ws_name  = "".join(t.get("plain_text","")
+                                   for t in wp.get("Session Name",{}).get("title",[])) or "Session"
+                ws_start  = (wp.get("Session Start",{}).get("date") or {}).get("start","")
+                ws_status = extract(wp.get("Status", {})) or ""
+                sessions_info.append({
+                    "id":     ws["id"].replace("-",""),
+                    "url":    ws.get("url",""),
+                    "name":   ws_name,
+                    "start":  ws_start,
+                    "status": ws_status,
+                })
+            sessions_info.sort(key=lambda s: s["start"] or "", reverse=True)
+
+            tasks.append({
+                "id":            task_id,
+                "url":           page.get("url",""),
+                "name":          task_name,
+                "status":        status,
+                "planned_end":   planned_end,
+                "work_sessions": sessions_info,
+            })
+
+        tasks.sort(key=lambda t: t["planned_end"] or "9999-99-99")
+        return jsonify({"tasks": tasks})
+    except requests.HTTPError as e:
+        code = e.response.status_code if e.response is not None else "?"
+        msg  = e.response.text[:300] if e.response is not None else str(e)
+        return jsonify({"error": f"Notion API {code}: {msg}"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/log-session", methods=["POST"])
+def api_log_session():
+    """
+    Create a Work Session linked to an EXISTING Master WBS task (no new task created).
+
+    Body: {token, master_task_id, project_id, session_start,
+           session_end (optional), status (optional), work_type (optional)}
+    Returns: {ok, ws_url}
+    """
+    body           = request.json or {}
+    token          = body.get("token", "").strip()
+    master_task_id = body.get("master_task_id", "").strip()
+    project_id     = body.get("project_id", "").strip()
+    session_start  = body.get("session_start", "").strip()
+    session_end    = body.get("session_end", "").strip()
+    status         = body.get("status", "").strip()
+    work_type      = body.get("work_type", "").strip()
+
+    if not token or not master_task_id or not project_id:
+        return jsonify({"error": "token, master_task_id, and project_id are required"}), 400
+
+    try:
+        # Fetch task name to use as session name
+        r = requests.get(f"{NOTION_API}/pages/{master_task_id}",
+                         headers=headers(token), timeout=15)
+        r.raise_for_status()
+        page_props = r.json().get("properties", {})
+        task_name  = "".join(t.get("plain_text","")
+                             for t in page_props.get("Task Name",{}).get("title",[]))
+
+        ws_props = {
+            "Session Name": p_title(task_name or "Work Session"),
+            "Task":    {"relation": [{"id": master_task_id}]},
+            "Project": {"relation": [{"id": project_id}]},
+        }
+        if session_start:
+            date_val = {"start": session_start}
+            if session_end:
+                date_val["end"] = session_end
+            ws_props["Session Start"] = {"date": date_val}
+        if status:
+            ws_props["Status"] = {"status": {"name": status}}
+        if work_type and work_type in VALID_WORK_TYPES:
+            ws_props["Work Type"] = {"select": {"name": work_type}}
+
+        r2 = requests.post(
+            f"{NOTION_API}/pages",
+            headers=headers(token),
+            json={"parent": {"database_id": WORK_SESSIONS_DB_ID}, "properties": ws_props},
+            timeout=20,
+        )
+        r2.raise_for_status()
+        ws_page = r2.json()
+
+        sessions_mappings = load_sessions_mappings()
+        sessions_mappings[master_task_id.replace("-","")] = ws_page["id"]
+        save_sessions_mappings(sessions_mappings)
+
+        return jsonify({"ok": True, "ws_url": ws_page.get("url", "")})
+    except requests.HTTPError as e:
+        code = e.response.status_code if e.response is not None else "?"
+        msg  = e.response.text[:300] if e.response is not None else str(e)
+        return jsonify({"error": f"Notion API {code}: {msg}"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 # ── Focus Task List ───────────────────────────────────────────────────────────
 
 @app.route("/focus")
@@ -3204,6 +3356,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <div class="tab" onclick="switchTab('sources')">🗂 Sources</div>
   <div class="tab" onclick="switchTab('sync')">▶️ Sync</div>
   <div class="tab" onclick="switchTab('quick')">⚡ Quick Start</div>
+  <div class="tab" onclick="switchTab('check')">🔍 Check Tasks</div>
   <div class="tab" onclick="switchTab('help')">❓ Help</div>
   <div class="tab" onclick="window.open('/design','_blank')">📐 Design Doc</div>
 </div>
@@ -3495,6 +3648,85 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- ── CHECK TASKS TAB ───────────────────────────────────────────────────── -->
+<div id="pane-check" class="pane">
+  <div class="card">
+    <h3>🔍 Check Existing Tasks</h3>
+    <div class="hint">
+      Query all active (non-completed) tasks for a project before creating a new one.
+      If you find a matching task, log a work session directly from here.
+    </div>
+
+    <div class="field-group">
+      <label>Project / WBS Database <span class="mapping-req">*</span></label>
+      <select id="chk-source" onchange="onChkSourceChange()">
+        <option value="">— select a project —</option>
+      </select>
+    </div>
+
+    <div class="row" style="margin-top:4px;">
+      <button class="btn btn-primary" id="chk-btn" onclick="runCheckTasks()">🔍 Query Active Tasks</button>
+    </div>
+  </div>
+
+  <!-- Task results list -->
+  <div id="chk-results" style="display:none;">
+    <div id="chk-results-err" style="display:none;" class="notice notice-err" style="margin-bottom:12px;"></div>
+    <div id="chk-task-list"></div>
+  </div>
+
+  <!-- Inline log-session form (shown when user clicks "Log Session" on a task) -->
+  <div id="chk-log-form" style="display:none;" class="card">
+    <h3 style="margin-bottom:4px;">⏱️ Log Session for: <span id="chk-log-task-name" style="color:var(--accent);font-weight:600;"></span></h3>
+    <p style="font-size:12px;color:#888;margin-bottom:14px;">This creates a new Work Session linked to the existing task — no duplicate task is created.</p>
+
+    <div class="field-group">
+      <label>Session Start <span class="mapping-req">*</span></label>
+      <input type="datetime-local" id="chk-start" style="font-size:13px;">
+      <div class="row" style="margin-top:6px;">
+        <button class="btn btn-ghost" onclick="setChkNow('chk-start')" style="font-size:12px;padding:5px 10px;">Use Now</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="field-group" style="margin-bottom:0;">
+        <label>Session End <span style="font-weight:400;color:#888;">(optional)</span></label>
+        <input type="datetime-local" id="chk-end" style="font-size:13px;">
+        <div class="row" style="margin-top:6px;">
+          <button class="btn btn-ghost" onclick="setChkNow('chk-end')" style="font-size:12px;padding:5px 10px;">Use Now</button>
+        </div>
+      </div>
+      <div class="field-group" style="margin-bottom:0;">
+        <label>Status <span style="font-weight:400;color:#888;">(optional)</span></label>
+        <select id="chk-status">
+          <option value="">— leave blank —</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+          <option value="On Hold">On Hold</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-top:14px;">
+      <label>Work Type <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <select id="chk-work-type">
+        <option value="">— leave blank —</option>
+        <option value="🔵 Deep Work">🔵 Deep Work</option>
+        <option value="🟡 Meeting &amp; Call">🟡 Meeting &amp; Call</option>
+        <option value="🟠 Admin &amp; Ops">🟠 Admin &amp; Ops</option>
+        <option value="🟢 Communication">🟢 Communication</option>
+      </select>
+    </div>
+
+    <div class="row" style="margin-top:4px;gap:8px;">
+      <button class="btn btn-primary" id="chk-log-btn" onclick="runLogSession()">⏱️ Log Session</button>
+      <button class="btn btn-ghost" onclick="cancelLogSession()">Cancel</button>
+    </div>
+
+    <div id="chk-log-result" style="display:none;margin-top:12px;font-size:13px;"></div>
+  </div>
+</div>
+
 <!-- ── HELP TAB ──────────────────────────────────────────────────────────── -->
 <div id="pane-help" class="pane">
   <div class="card">
@@ -3735,7 +3967,7 @@ function renderSourceList() {
 
   for (const db of state.discoveredDbs) {
     const saved = state.savedSources[db.id] || {};
-    const isChecked = !!(saved.project_id);
+    const isChecked = !!(saved.project_id && !saved.disabled);
     const card = document.createElement("div");
     card.className = "source-card";
     card.id = "sc-" + db.id;
@@ -3941,10 +4173,20 @@ function renderMapping(dbId, columns, savedMap) {
 }
 
 async function saveSourceConfig() {
-  const sources = {};
+  // Start with all existing configs so unchecked sources are never lost
+  const sources = Object.assign({}, state.savedSources || {});
+
   for (const db of state.discoveredDbs) {
     const chk = document.getElementById("chk-"+db.id);
-    if (!chk || !chk.checked) continue;
+    const checked = chk && chk.checked;
+
+    if (!checked) {
+      // Preserve any existing config but mark as disabled so it won't sync
+      if (sources[db.id]) {
+        sources[db.id] = Object.assign({}, sources[db.id], {disabled: true});
+      }
+      continue;
+    }
 
     const projId = resolveProjectId(db.id);
     if (!projId) {
@@ -3975,6 +4217,7 @@ async function saveSourceConfig() {
       backlink_field: blField,
       auto_calc_planned_start: autops,
       hub_page_url: hubUrl,
+      disabled: false,
     };
   }
 
@@ -4007,7 +4250,7 @@ async function saveSourceConfig() {
 // ── Sync tab ──────────────────────────────────────────────────────────────────
 function refreshSyncTab() {
   const container = document.getElementById("sync-source-list");
-  const entries = Object.entries(state.savedSources);
+  const entries = Object.entries(state.savedSources).filter(([,src]) => !src.disabled);
   if (!entries.length) {
     container.innerHTML = '<p style="color:#888;font-size:13px;">No sources configured yet. Go to the Sources tab to set them up.</p>';
     return;
@@ -4030,6 +4273,7 @@ function getProjectLabel(projectId) {
 function buildSourcesList() {
   const sources = [];
   for (const [dbId, src] of Object.entries(state.savedSources)) {
+    if (src.disabled) continue;
     const chk = document.getElementById("sync-chk-"+dbId);
     if (chk && chk.checked) {
       sources.push({
@@ -4323,6 +4567,7 @@ function refreshQuickTab() {
   const current = sel.value;
   sel.innerHTML = '<option value="">— select a project —</option>';
   for (const [dbId, src] of Object.entries(state.savedSources)) {
+    if (src.disabled) continue;
     const label = src.db_title || dbId;
     const opt   = document.createElement("option");
     opt.value       = dbId;
@@ -4498,10 +4743,208 @@ async function runQuickAdd() {
   }
 }
 
+// ── Check Tasks tab ───────────────────────────────────────────────────────────
+let _chkActiveTaskId   = null;
+let _chkActiveTaskName = null;
+let _chkActiveProjectId = null;
+
+function refreshCheckTab() {
+  const sel = document.getElementById("chk-source");
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— select a project —</option>';
+  for (const [dbId, src] of Object.entries(state.savedSources)) {
+    if (src.disabled) continue;
+    const opt = document.createElement("option");
+    opt.value       = dbId;
+    opt.textContent = src.db_title || dbId;
+    if (dbId === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function onChkSourceChange() {
+  // Reset results when project changes
+  document.getElementById("chk-results").style.display = "none";
+  document.getElementById("chk-log-form").style.display = "none";
+}
+
+async function runCheckTasks() {
+  const dbId = document.getElementById("chk-source").value;
+  if (!dbId) { alert("Please select a project."); return; }
+  if (!state.token) { alert("No token — save one in the Setup tab."); return; }
+
+  const src = state.savedSources[dbId];
+  if (!src || !src.project_id) {
+    alert("Project ID not found — go to Sources tab and save configuration.");
+    return;
+  }
+
+  const btn = document.getElementById("chk-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Querying…';
+  document.getElementById("chk-results").style.display = "none";
+  document.getElementById("chk-log-form").style.display = "none";
+
+  const res = await api("POST", "/api/existing-tasks", {
+    token:      state.token,
+    project_id: src.project_id,
+  });
+
+  btn.disabled = false;
+  btn.innerHTML = "🔍 Query Active Tasks";
+  document.getElementById("chk-results").style.display = "block";
+
+  const errEl  = document.getElementById("chk-results-err");
+  const listEl = document.getElementById("chk-task-list");
+
+  if (res.error) {
+    errEl.textContent = "✗ " + res.error;
+    errEl.style.display = "block";
+    listEl.innerHTML = "";
+    return;
+  }
+  errEl.style.display = "none";
+
+  const tasks = res.tasks || [];
+  if (tasks.length === 0) {
+    listEl.innerHTML = '<div class="card" style="color:#666;font-size:13px;">No active tasks found for this project. Safe to create a new one.</div>';
+    return;
+  }
+
+  const rows = tasks.map(t => {
+    const dueLabel = t.planned_end
+      ? `<span style="font-size:11px;color:#888;">Due: ${t.planned_end}</span>`
+      : "";
+    const statusBadge = t.status
+      ? `<span style="font-size:11px;padding:2px 7px;border-radius:10px;background:#e2e8f0;color:#4a5568;">${escHtml(t.status)}</span>`
+      : "";
+    const sessionLines = t.work_sessions.length === 0
+      ? '<span style="font-size:11px;color:#a0aec0;">No sessions yet</span>'
+      : t.work_sessions.slice(0, 3).map(s => {
+          const startFmt = s.start ? s.start.replace("T"," ").slice(0,16) : "no date";
+          const sStatus  = s.status ? ` · ${escHtml(s.status)}` : "";
+          return `<a href="${escHtml(s.url)}" target="_blank" style="font-size:11px;color:var(--accent);display:block;">
+            ⏱️ ${escHtml(s.name)} — ${startFmt}${sStatus}
+          </a>`;
+        }).join("") +
+        (t.work_sessions.length > 3
+          ? `<span style="font-size:11px;color:#a0aec0;">+ ${t.work_sessions.length - 3} more</span>`
+          : "");
+
+    return `<div class="card" style="margin-bottom:10px;padding:14px 16px;">
+      <div style="display:flex;align-items:flex-start;gap:10px;justify-content:space-between;">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+            <a href="${escHtml(t.url)}" target="_blank"
+               style="font-size:14px;font-weight:600;color:var(--text);text-decoration:none;word-break:break-word;">
+              ${escHtml(t.name)}
+            </a>
+            ${statusBadge}
+            ${dueLabel}
+          </div>
+          <div style="margin-top:4px;">${sessionLines}</div>
+        </div>
+        <button class="btn btn-ghost"
+                style="font-size:12px;padding:5px 10px;white-space:nowrap;flex-shrink:0;"
+                onclick="openLogForm('${escHtml(t.id)}','${escHtml(t.name.replace(/'/g,"\\'"))}','${escHtml(src.project_id)}')">
+          ⏱️ Log Session
+        </button>
+      </div>
+    </div>`;
+  }).join("");
+
+  listEl.innerHTML = `<p style="font-size:12px;color:#888;margin-bottom:8px;">${tasks.length} active task(s) found — click a task name to open in Notion, or "Log Session" to record work.</p>` + rows;
+}
+
+function openLogForm(taskId, taskName, projectId) {
+  _chkActiveTaskId    = taskId;
+  _chkActiveTaskName  = taskName;
+  _chkActiveProjectId = projectId;
+
+  document.getElementById("chk-log-task-name").textContent = taskName;
+  document.getElementById("chk-start").value   = "";
+  document.getElementById("chk-end").value     = "";
+  document.getElementById("chk-status").value  = "";
+  document.getElementById("chk-work-type").value = "";
+  document.getElementById("chk-log-result").style.display = "none";
+  document.getElementById("chk-log-result").textContent   = "";
+
+  const form = document.getElementById("chk-log-form");
+  form.style.display = "block";
+  form.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+function cancelLogSession() {
+  document.getElementById("chk-log-form").style.display = "none";
+  _chkActiveTaskId = _chkActiveTaskName = _chkActiveProjectId = null;
+}
+
+function setChkNow(fieldId) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  document.getElementById(fieldId).value =
+    `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}` +
+    `T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function localIso(val) {
+  if (!val) return "";
+  const d   = new Date(val);
+  const pad = n => String(n).padStart(2,"0");
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? "+" : "-";
+  const hh   = pad(Math.floor(Math.abs(off)/60));
+  const mm   = pad(Math.abs(off)%60);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}${sign}${hh}:${mm}`;
+}
+
+async function runLogSession() {
+  if (!_chkActiveTaskId || !_chkActiveProjectId) return;
+
+  const startVal  = document.getElementById("chk-start").value;
+  if (!startVal) { alert("Please enter a Session Start time."); return; }
+
+  const endVal    = document.getElementById("chk-end").value;
+  const status    = document.getElementById("chk-status").value;
+  const workType  = document.getElementById("chk-work-type").value;
+
+  const btn = document.getElementById("chk-log-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Logging…';
+
+  const resultEl = document.getElementById("chk-log-result");
+  resultEl.style.display = "none";
+
+  const res = await api("POST", "/api/log-session", {
+    token:          state.token,
+    master_task_id: _chkActiveTaskId,
+    project_id:     _chkActiveProjectId,
+    session_start:  localIso(startVal),
+    session_end:    localIso(endVal),
+    status:         status,
+    work_type:      workType,
+  });
+
+  btn.disabled = false;
+  btn.innerHTML = "⏱️ Log Session";
+  resultEl.style.display = "block";
+
+  if (res.error) {
+    resultEl.innerHTML = `<span style="color:#e53e3e;">✗ ${escHtml(res.error)}</span>`;
+  } else {
+    resultEl.innerHTML = `<span style="color:#38a169;font-weight:600;">✓ Session logged!</span>
+      &nbsp;<a href="${escHtml(res.ws_url)}" target="_blank" style="font-size:13px;">Open in Notion →</a>`;
+    // Refresh the task list so updated session count shows
+    setTimeout(runCheckTasks, 800);
+  }
+}
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t,i)=> {
-    const names = ["setup","sources","sync","quick","help"];
+    const names = ["setup","sources","sync","quick","check","help"];
     t.classList.toggle("active", names[i]===name);
   });
   document.querySelectorAll(".pane").forEach(p => {
@@ -4509,6 +4952,7 @@ function switchTab(name) {
   });
   if (name === "sync")  refreshSyncTab();
   if (name === "quick") refreshQuickTab();
+  if (name === "check") refreshCheckTab();
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
