@@ -1,6 +1,12 @@
 # Notion token and sensitive config — NEVER commit these
 focal_config.json
 
+# Backups: commit the JSON snapshots (version-controlled history), ignore log noise
+backups/backup.log
+backups/launchd_stdout.log
+backups/launchd_stderr.log
+backups/remap_*.json
+
 # Auto-generated mapping files — rebuilt by Sync Now, not needed in version control
 focal_mappings.json
 focal_sessions_mappings.json

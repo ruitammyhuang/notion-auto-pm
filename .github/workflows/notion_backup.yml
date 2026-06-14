@@ -1,0 +1,44 @@
+name: Daily Notion Backup
+
+on:
+  schedule:
+    # 11:00 UTC = 6:00 AM ET (EST) / 7:00 AM ET (EDT)
+    - cron: '0 11 * * *'
+  workflow_dispatch:   # allow manual trigger from GitHub Actions tab
+
+jobs:
+  backup:
+    name: Snapshot Notion databases
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          # Use a PAT (REPO_TOKEN) so the push back to main is allowed.
+          # If you don't have one set up yet, GITHUB_TOKEN works for public repos.
+          token: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run backup
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/notion_backup.py
+
+      - name: Commit backup to repo
+        run: |
+          git config user.name  "notion-backup[bot]"
+          git config user.email "notion-backup@users.noreply.github.com"
+          git add backups/
+          # Only commit if something changed (new backup file or pruning removed old ones)
+          git diff --staged --quiet \
+            && echo "No changes to commit." \
+            || git commit -m "chore: Notion backup $(date -u '+%Y-%m-%d')"
+          git push
