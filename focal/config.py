@@ -36,6 +36,7 @@ CONFIG_FILE           = os.path.join(BASE_DIR, "focal_config.json")
 SESSIONS_MAPPING_FILE = os.path.join(BASE_DIR, "focal_sessions_mappings.json")
 FOCUS_CACHE_FILE      = os.path.join(BASE_DIR, "focus-task-list-cache.json")
 STUDENTS_FILE         = os.path.join(BASE_DIR, "focal_students.json")
+WBS_SOURCES_FILE      = os.path.join(BASE_DIR, "notion_wbs_sources.json")  # token-free, committed to git
 
 # ── Notion API constants ───────────────────────────────────────────────────────
 NOTION_API     = "https://api.notion.com/v1"
@@ -70,6 +71,9 @@ def load_config() -> dict:
 def save_config(cfg: dict) -> None:
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
+    # Auto-export token-free sources for GitHub Actions backup
+    with open(WBS_SOURCES_FILE, "w") as f:
+        json.dump(cfg.get("sources", {}), f, indent=2, ensure_ascii=False)
 
 
 # ── Sessions mapping persistence ───────────────────────────────────────────────
