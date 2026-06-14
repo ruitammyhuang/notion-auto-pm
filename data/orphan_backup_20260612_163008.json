@@ -1,0 +1,4309 @@
+{
+  "created_at": "2026-06-12T16:30:08.455428+00:00",
+  "executed": false,
+  "restore_hint": "Run:  python cleanup_all_orphans.py --restore orphan_backup_20260612_163008.json",
+  "orphan_count": 24,
+  "orphans": [
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-81ad-8959-fc8df7c37ab1",
+      "master_title": "Pivot analysis: LXD outcomes",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81ad-8959-fc8df7c37ab1",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot table for LXD outcomes column. Categories include: developed intervention, proposed/tested design model, vetted learning experiences, advanced LXD theoretical understanding.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot table for LXD outcomes column. Categories include: developed intervention, proposed/tested design model, vetted learning experiences, advanced LXD theoretical understanding.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-11",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: LXD outcomes",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: LXD outcomes",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-LXD-outcomes-36e54686ae1581ad8959fc8df7c37ab1",
+        "public_url": null,
+        "archived": false,
+        "request_id": "2d3c261b-8886-4d9c-a2b5-ada74dafeb2e"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-812f-9917-f9fca948905e",
+      "master_title": "Pivot analysis: Tools & technologies used for design",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-812f-9917-f9fca948905e",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot table for Tools/technologies used for design column. Identify most frequently used tools and any trends over time.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot table for Tools/technologies used for design column. Identify most frequently used tools and any trends over time.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-11",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: Tools & technologies used for design",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: Tools & technologies used for design",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-Tools-technologies-used-for-design-36e54686ae15812f9917f9fca948905e",
+        "public_url": null,
+        "archived": false,
+        "request_id": "43f9dc57-9e25-4b9b-bc20-1ecaee70214f"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-811b-bc25-d496ff0fb9af",
+      "master_title": "Pivot analysis: Theoretical grounding for LXD (col M)",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-811b-bc25-d496ff0fb9af",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Extract exact theory names from col M (Theoretical Grounding for LXD). Build pivot table showing frequency and distribution. Focus only on studies where LXD is the main research focus.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Extract exact theory names from col M (Theoretical Grounding for LXD). Build pivot table showing frequency and distribution. Focus only on studies where LXD is the main research focus.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-06-27",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: Theoretical grounding for LXD (col M)",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: Theoretical grounding for LXD (col M)",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-Theoretical-grounding-for-LXD-col-M-36e54686ae15811bbc25d496ff0fb9af",
+        "public_url": null,
+        "archived": false,
+        "request_id": "425aa539-f429-42df-90ca-0d41fe51f42a"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-81d4-b7de-d6dd3fe7466d",
+      "master_title": "Pivot analysis: LXD Design & Evaluation methods",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81d4-b7de-d6dd3fe7466d",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Build pivot tables for cols LXD Design methods and LXD Evaluation methods. Analyze frequency and trends over time.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Build pivot tables for cols LXD Design methods and LXD Evaluation methods. Analyze frequency and trends over time.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-11",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: LXD Design & Evaluation methods",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: LXD Design & Evaluation methods",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-LXD-Design-Evaluation-methods-36e54686ae1581d4b7ded6dd3fe7466d",
+        "public_url": null,
+        "archived": false,
+        "request_id": "79379d4e-b225-48a7-afe9-05b61843271a"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-81d0-a691-fc6e9477520c",
+      "master_title": "Pivot analysis: Level of explicitness (implicit vs. explicit)",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81d0-a691-fc6e9477520c",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Build pivot table for level of LXD explicitness across time chunks. Look for trends in how explicitly authors invoke LXD over time.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Build pivot table for level of LXD explicitness across time chunks. Look for trends in how explicitly authors invoke LXD over time.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-06-27",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-06-20",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: Level of explicitness (implicit vs. explicit)",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: Level of explicitness (implicit vs. explicit)",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-Level-of-explicitness-implicit-vs-explicit-36e54686ae1581d0a691fc6e9477520c",
+        "public_url": null,
+        "archived": false,
+        "request_id": "f1f6d339-d8a0-4e29-9a46-9f5e78ea8136"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-816c-899a-e95e0343b41b",
+      "master_title": "Pivot analysis: Design methodology & framework (cols U–V)",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-816c-899a-e95e0343b41b",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Col U: pivot table for design methodology/framework (e.g., design thinking, DBR, ADDIE, SAM). Col V: review excerpts for newly proposed methodologies — discuss how to report meaningfully for readers.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Col U: pivot table for design methodology/framework (e.g., design thinking, DBR, ADDIE, SAM). Col V: review excerpts for newly proposed methodologies — discuss how to report meaningfully for readers.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-11",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: Design methodology & framework (cols U–V)",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: Design methodology & framework (cols U–V)",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-Design-methodology-framework-cols-U-V-36e54686ae15816c899ae95e0343b41b",
+        "public_url": null,
+        "archived": false,
+        "request_id": "793ec301-69a2-4a87-bc67-90fe1490af73"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-81c3-a1fc-c660123cc47b",
+      "master_title": "Pivot analysis: Design context (disciplines, grade levels, modality)",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81c3-a1fc-c660123cc47b",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot tables for: Disciplines Involved, Learning Context/Grade Levels, and Learning Modality columns.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot tables for: Disciplines Involved, Learning Context/Grade Levels, and Learning Modality columns.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-11",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: Design context (disciplines, grade levels, modality)",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: Design context (disciplines, grade levels, modality)",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-Design-context-disciplines-grade-levels-modality-36e54686ae1581c3a1fcc660123cc47b",
+        "public_url": null,
+        "archived": false,
+        "request_id": "b90e5e6b-ca82-4691-a82a-96c0cec85713"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-8194-9317-cd7468b9a0d8",
+      "master_title": "Pivot analysis: Learning Goals the design intended to propel (col O)",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8194-9317-cd7468b9a0d8",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:53:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Categorical pivot table of col O (Learning Goals the Learning Design Intended To Propel). Identify dominant and emerging learning goal categories across the corpus.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Categorical pivot table of col O (Learning Goals the Learning Design Intended To Propel). Identify dominant and emerging learning goal categories across the corpus.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-07-04",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-06-27",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: Learning Goals the design intended to propel (col O)",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: Learning Goals the design intended to propel (col O)",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-Learning-Goals-the-design-intended-to-propel-col-O-36e54686ae1581949317cd7468b9a0d8",
+        "public_url": null,
+        "archived": false,
+        "request_id": "0b1cd60f-5420-401a-800f-b8b86b82bf7e"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc",
+      "source_db_id": "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27",
+      "db_title": "WBS — Beyond the LXD Label Scoping Review",
+      "master_id": "36e54686-ae15-816a-aa03-e4af495131bd",
+      "master_title": "Pivot analysis: LXD definition source of citation by time chunks",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-816a-aa03-e4af495131bd",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:54:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Extract citation sources for LXD definitions. Build pivot table segmented by time period. Examine whether foundational citations remain stable or shift over time.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Extract citation sources for LXD definitions. Build pivot table segmented by time period. Examine whether foundational citations remain stable or shift over time.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-06-27",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-06-20",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Pivot analysis: LXD definition source of citation by time chunks",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Pivot analysis: LXD definition source of citation by time chunks",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Pivot-analysis-LXD-definition-source-of-citation-by-time-chunks-36e54686ae15816aaa03e4af495131bd",
+        "public_url": null,
+        "archived": false,
+        "request_id": "4f9a3baa-7b4a-4ca9-b493-ee248e757e5c"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80b4-99c2-cc34c8050f11",
+      "source_db_id": "cd502046-314d-43cb-a2e9-1e4c1f59f2b8",
+      "db_title": "📋 WBS - CS+AI Competency Job Posts Analysis",
+      "master_id": "36e54686-ae15-81e0-92b9-d8c002ddb98d",
+      "master_title": "2.4 Synthesize coding taxonomy",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81e0-92b9-d8c002ddb98d",
+        "created_time": "2026-05-28T13:08:00.000Z",
+        "last_edited_time": "2026-06-10T02:55:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80b4-99c2-cc34c8050f11"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "dfcacc34-5a5f-495b-bb18-e301d6435b1a",
+              "name": "High",
+              "color": "orange"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "2.4 Synthesize coding taxonomy",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "2.4 Synthesize coding taxonomy",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/2-4-Synthesize-coding-taxonomy-36e54686ae1581e092b9d8c002ddb98d",
+        "public_url": null,
+        "archived": false,
+        "request_id": "0dbaa8c3-9476-4088-9257-7118cf7b830c"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80b4-99c2-cc34c8050f11",
+      "source_db_id": "cd502046-314d-43cb-a2e9-1e4c1f59f2b8",
+      "db_title": "📋 WBS - CS+AI Competency Job Posts Analysis",
+      "master_id": "36e54686-ae15-8134-853e-fe1802fb3528",
+      "master_title": "2.1 CS competency models and standards",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8134-853e-fe1802fb3528",
+        "created_time": "2026-05-28T13:07:00.000Z",
+        "last_edited_time": "2026-06-10T02:56:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80b4-99c2-cc34c8050f11"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "2.1 CS competency models and standards",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "2.1 CS competency models and standards",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/2-1-CS-competency-models-and-standards-36e54686ae158134853efe1802fb3528",
+        "public_url": null,
+        "archived": false,
+        "request_id": "f36b2e94-2981-45a4-bc6a-ba335bcab671"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36a54686-ae15-80a0-a85c-f536878e61e9",
+      "source_db_id": "b4f7bdc6-365a-429b-a240-8d958f888ecd",
+      "db_title": "📋 WBS — EDG 6648 Course Design",
+      "master_id": "36e54686-ae15-8162-9c52-d6d459c4b3ff",
+      "master_title": "Assignment ecosystem standardization (two-type system)",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8162-9c52-d6d459c4b3ff",
+        "created_time": "2026-05-28T13:08:00.000Z",
+        "last_edited_time": "2026-06-10T02:54:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36a54686-ae15-80a0-a85c-f536878e61e9"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Established Individual Scholarly Development + Collaborative Learning assignment templates",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Established Individual Scholarly Development + Collaborative Learning assignment templates",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Assignment ecosystem standardization (two-type system)",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Assignment ecosystem standardization (two-type system)",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Assignment-ecosystem-standardization-two-type-system-36e54686ae1581629c52d6d459c4b3ff",
+        "public_url": null,
+        "archived": false,
+        "request_id": "6064c208-e680-4bf7-9c25-b18ecfc8bb6d"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36a54686-ae15-80a0-a85c-f536878e61e9",
+      "source_db_id": "b4f7bdc6-365a-429b-a240-8d958f888ecd",
+      "db_title": "📋 WBS — EDG 6648 Course Design",
+      "master_id": "36e54686-ae15-811e-9573-ce35e2c96f86",
+      "master_title": "Individual and collaborative assignment UI systems",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-811e-9573-ce35e2c96f86",
+        "created_time": "2026-05-28T13:08:00.000Z",
+        "last_edited_time": "2026-06-10T02:54:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36a54686-ae15-80a0-a85c-f536878e61e9"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Standardized visual and structural layout for all assignment pages in Canvas",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Standardized visual and structural layout for all assignment pages in Canvas",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Individual and collaborative assignment UI systems",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Individual and collaborative assignment UI systems",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Individual-and-collaborative-assignment-UI-systems-36e54686ae15811e9573ce35e2c96f86",
+        "public_url": null,
+        "archived": false,
+        "request_id": "a5f17623-0c12-40ec-b7a1-e0b02eb39a86"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36a54686-ae15-80a0-a85c-f536878e61e9",
+      "source_db_id": "b4f7bdc6-365a-429b-a240-8d958f888ecd",
+      "db_title": "📋 WBS — EDG 6648 Course Design",
+      "master_id": "36e54686-ae15-8103-a969-d7eb2c4f663b",
+      "master_title": "Module 4 staged literature critique design",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8103-a969-d7eb2c4f663b",
+        "created_time": "2026-05-28T13:08:00.000Z",
+        "last_edited_time": "2026-06-10T02:55:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36a54686-ae15-80a0-a85c-f536878e61e9"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Staged critique activity for scholarly critique skill building",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Staged critique activity for scholarly critique skill building",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Module 4 staged literature critique design",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Module 4 staged literature critique design",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Module-4-staged-literature-critique-design-36e54686ae158103a969d7eb2c4f663b",
+        "public_url": null,
+        "archived": false,
+        "request_id": "ecce1bdd-3315-4c0e-b405-423a637d5402"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36a54686-ae15-80a0-a85c-f536878e61e9",
+      "source_db_id": "b4f7bdc6-365a-429b-a240-8d958f888ecd",
+      "db_title": "📋 WBS — EDG 6648 Course Design",
+      "master_id": "36a54686-ae15-80a4-bd17-c714800b4940",
+      "master_title": "Module 4 assignment page design",
+      "has_hours": true,
+      "ws_ids": [
+        "36a54686-ae15-80a9-a0a0-f4df3c29f09e"
+      ],
+      "master_page_data": {
+        "object": "page",
+        "id": "36a54686-ae15-80a4-bd17-c714800b4940",
+        "created_time": "2026-05-24T21:06:00.000Z",
+        "last_edited_time": "2026-05-30T02:17:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "c39d3594-609e-4ac2-b731-11b24c7edaaf"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "c39d3594-609e-4ac2-b731-11b24c7edaaf"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36a54686-ae15-80a0-a85c-f536878e61e9"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": {
+              "id": "990749a1-8150-4989-95d5-2bdda977cfb3",
+              "name": "🔵 Deep Work",
+              "color": "blue"
+            }
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "convert critiquing PDF to word docs, update assignment pages.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "convert critiquing PDF to word docs, update assignment pages.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 1,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "0210242d-618c-4b58-86c8-01d24dd5ee96",
+              "name": "Urgent",
+              "color": "red"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Completed"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": {
+              "start": "2026-05-31",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36a54686-ae15-80a9-a0a0-f4df3c29f09e"
+              }
+            ],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 1,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": []
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 1,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": {
+              "start": "2026-05-24",
+              "end": null,
+              "time_zone": null
+            }
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Module 4 assignment page design",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Module 4 assignment page design",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Module-4-assignment-page-design-36a54686ae1580a4bd17c714800b4940",
+        "public_url": null,
+        "archived": false,
+        "request_id": "99f56546-00be-46ab-9935-0fb1c9f6710a"
+      },
+      "work_sessions": [
+        {
+          "ws_id": "36a54686-ae15-80a9-a0a0-f4df3c29f09e",
+          "ws_title": "Update Weeks 6-8 assignment pages",
+          "ws_page_data": {
+            "object": "page",
+            "id": "36a54686-ae15-80a9-a0a0-f4df3c29f09e",
+            "created_time": "2026-05-24T21:08:00.000Z",
+            "last_edited_time": "2026-05-25T04:46:00.000Z",
+            "created_by": {
+              "object": "user",
+              "id": "c39d3594-609e-4ac2-b731-11b24c7edaaf"
+            },
+            "last_edited_by": {
+              "object": "user",
+              "id": "c39d3594-609e-4ac2-b731-11b24c7edaaf"
+            },
+            "cover": null,
+            "icon": null,
+            "parent": {
+              "type": "database_id",
+              "database_id": "308c193f-bba3-4a1e-be8d-817fd72e9d9a"
+            },
+            "in_trash": false,
+            "is_archived": false,
+            "is_locked": false,
+            "properties": {
+              "Duration (hrs)": {
+                "id": "Bu%7D%7D",
+                "type": "formula",
+                "formula": {
+                  "type": "number",
+                  "number": 1
+                }
+              },
+              "Session End": {
+                "id": "C%60%3FY",
+                "type": "date",
+                "date": {
+                  "start": "2026-05-24T18:15:00.000-04:00",
+                  "end": null,
+                  "time_zone": null
+                }
+              },
+              "Session Start": {
+                "id": "Zc%5CI",
+                "type": "date",
+                "date": {
+                  "start": "2026-05-24T17:15:00.000-04:00",
+                  "end": null,
+                  "time_zone": null
+                }
+              },
+              "Project": {
+                "id": "ZiFJ",
+                "type": "relation",
+                "relation": [
+                  {
+                    "id": "36a54686-ae15-80a0-a85c-f536878e61e9"
+                  }
+                ],
+                "has_more": false
+              },
+              "Is Completed": {
+                "id": "bpXu",
+                "type": "formula",
+                "formula": {
+                  "type": "number",
+                  "number": 1
+                }
+              },
+              "Task": {
+                "id": "ceRk",
+                "type": "relation",
+                "relation": [
+                  {
+                    "id": "36a54686-ae15-80a4-bd17-c714800b4940"
+                  }
+                ],
+                "has_more": false
+              },
+              "Status": {
+                "id": "r%5DL%3C",
+                "type": "select",
+                "select": {
+                  "id": "e01b3313-9b4f-4365-ab9c-c70792e5fe87",
+                  "name": "Completed",
+                  "color": "green"
+                }
+              },
+              "Notes": {
+                "id": "z%60Kg",
+                "type": "rich_text",
+                "rich_text": []
+              },
+              "Session Name": {
+                "id": "title",
+                "type": "title",
+                "title": [
+                  {
+                    "type": "text",
+                    "text": {
+                      "content": "Update Weeks 6-8 assignment pages",
+                      "link": null
+                    },
+                    "annotations": {
+                      "bold": false,
+                      "italic": false,
+                      "strikethrough": false,
+                      "underline": false,
+                      "code": false,
+                      "color": "default"
+                    },
+                    "plain_text": "Update Weeks 6-8 assignment pages",
+                    "href": null
+                  }
+                ]
+              }
+            },
+            "url": "https://app.notion.com/p/Update-Weeks-6-8-assignment-pages-36a54686ae1580a9a0a0f4df3c29f09e",
+            "public_url": null,
+            "archived": false,
+            "request_id": "5d219ac0-09e8-4ffc-a82f-32bb14382522"
+          }
+        }
+      ]
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-818c-8de5-fe979f7f56a4",
+      "master_title": "Feedback Summary — M3 Collaborative",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-818c-8de5-fe979f7f56a4",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:51:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Write class-wide feedback summary after M3 collaborative grading. Include in next week's announcement.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Write class-wide feedback summary after M3 collaborative grading. Include in next week's announcement.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary — M3 Collaborative",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary — M3 Collaborative",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Feedback-Summary-M3-Collaborative-36e54686ae15818c8de5fe979f7f56a4",
+        "public_url": null,
+        "archived": false,
+        "request_id": "593c5aab-d572-4d5f-b297-b46d4e9e26dc"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-8141-912c-f19f0abcf277",
+      "master_title": "Feedback Summary — M1 Collaborative",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8141-912c-f19f0abcf277",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:51:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Write class-wide feedback summary after M1 collaborative grading. Include in next week's announcement.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Write class-wide feedback summary after M1 collaborative grading. Include in next week's announcement.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary — M1 Collaborative",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary — M1 Collaborative",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Feedback-Summary-M1-Collaborative-36e54686ae158141912cf19f0abcf277",
+        "public_url": null,
+        "archived": false,
+        "request_id": "4e31c08a-5de4-4289-b713-dc263eedd3f5"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-81f6-a7f0-e5ba33beafdb",
+      "master_title": "Grade M6 Collaborative Assignment",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81f6-a7f0-e5ba33beafdb",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grade after peer-review submission period closes. Confirm date from Canvas.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grade after peer-review submission period closes. Confirm date from Canvas.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grading",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grading",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grade M6 Collaborative Assignment",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grade M6 Collaborative Assignment",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Grade-M6-Collaborative-Assignment-36e54686ae1581f6a7f0e5ba33beafdb",
+        "public_url": null,
+        "archived": false,
+        "request_id": "74534215-87cd-4b94-818f-63b5779c62f6"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-81df-97c5-f8eafa79077c",
+      "master_title": "Feedback Summary — M4 Collaborative",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81df-97c5-f8eafa79077c",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Write class-wide feedback summary after M4 collaborative grading. Include in next week's announcement.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Write class-wide feedback summary after M4 collaborative grading. Include in next week's announcement.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary — M4 Collaborative",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary — M4 Collaborative",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Feedback-Summary-M4-Collaborative-36e54686ae1581df97c5f8eafa79077c",
+        "public_url": null,
+        "archived": false,
+        "request_id": "b1b71287-107d-4af9-b525-ee49d772ae78"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-8170-9f1c-eb9b93e91166",
+      "master_title": "Grade M1 Collaborative Assignment",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8170-9f1c-eb9b93e91166",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grade after peer-review submission period closes. Confirm date from Canvas.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grade after peer-review submission period closes. Confirm date from Canvas.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grading",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grading",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grade M1 Collaborative Assignment",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grade M1 Collaborative Assignment",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Grade-M1-Collaborative-Assignment-36e54686ae1581709f1ceb9b93e91166",
+        "public_url": null,
+        "archived": false,
+        "request_id": "e25ce71b-b797-4647-b4de-464c1a673065"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-816d-8205-c54037d468b6",
+      "master_title": "Grade M2 Collaborative Assignment",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-816d-8205-c54037d468b6",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grade after peer-review submission period closes. Confirm date from Canvas.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grade after peer-review submission period closes. Confirm date from Canvas.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grading",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grading",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Grade M2 Collaborative Assignment",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Grade M2 Collaborative Assignment",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Grade-M2-Collaborative-Assignment-36e54686ae15816d8205c54037d468b6",
+        "public_url": null,
+        "archived": false,
+        "request_id": "176882a3-e6b2-4c20-8425-215fac56dae3"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-8138-8f35-e349cb23d6fb",
+      "master_title": "Feedback Summary — M6 Collaborative",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-8138-8f35-e349cb23d6fb",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Write class-wide feedback summary after M6 collaborative grading. Include in closing announcement.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Write class-wide feedback summary after M6 collaborative grading. Include in closing announcement.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary — M6 Collaborative",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary — M6 Collaborative",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Feedback-Summary-M6-Collaborative-36e54686ae1581388f35e349cb23d6fb",
+        "public_url": null,
+        "archived": false,
+        "request_id": "09b32aee-5eb3-43b6-95f0-a450330be4a4"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-81aa-b181-db4c9f44edd3",
+      "master_title": "Feedback Summary — M5 Collaborative",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81aa-b181-db4c9f44edd3",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Write class-wide feedback summary after M5 collaborative grading. Include in next week's announcement.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Write class-wide feedback summary after M5 collaborative grading. Include in next week's announcement.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary — M5 Collaborative",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary — M5 Collaborative",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Feedback-Summary-M5-Collaborative-36e54686ae1581aab181db4c9f44edd3",
+        "public_url": null,
+        "archived": false,
+        "request_id": "cbc898a8-e87f-4643-a91e-4ae647bcab6d"
+      },
+      "work_sessions": []
+    },
+    {
+      "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed",
+      "source_db_id": "001e7ca9-a7b8-4180-9dd8-0fc29fa00836",
+      "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+      "master_id": "36e54686-ae15-81f2-85a9-c0ece59cae7f",
+      "master_title": "Feedback Summary — M2 Collaborative",
+      "has_hours": false,
+      "ws_ids": [],
+      "master_page_data": {
+        "object": "page",
+        "id": "36e54686-ae15-81f2-85a9-c0ece59cae7f",
+        "created_time": "2026-05-28T13:09:00.000Z",
+        "last_edited_time": "2026-06-10T02:52:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "36a54686-ae15-8106-aa7c-00277b746484"
+        },
+        "cover": null,
+        "icon": null,
+        "parent": {
+          "type": "database_id",
+          "database_id": "2de3b2f3-d9b7-4481-bc88-511ea94de45e"
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "Project": {
+            "id": "%40Kr%7C",
+            "type": "relation",
+            "relation": [
+              {
+                "id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+              }
+            ],
+            "has_more": false
+          },
+          "Work Type": {
+            "id": "F%7DR_",
+            "type": "select",
+            "select": null
+          },
+          "Notes": {
+            "id": "JiTC",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Write class-wide feedback summary after M2 collaborative grading. Include in next week's announcement.",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Write class-wide feedback summary after M2 collaborative grading. Include in next week's announcement.",
+                "href": null
+              }
+            ]
+          },
+          "Total Actual Hours": {
+            "id": "T%3AtE",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Priority": {
+            "id": "UPNq",
+            "type": "select",
+            "select": {
+              "id": "31b6fc1d-7906-43ce-bce0-6d3b2d4b6a95",
+              "name": "Normal",
+              "color": "blue"
+            }
+          },
+          "Auto Status": {
+            "id": "YGR%3D",
+            "type": "formula",
+            "formula": {
+              "type": "string",
+              "string": "Not Started"
+            }
+          },
+          "Planned End": {
+            "id": "_%5D%3BR",
+            "type": "date",
+            "date": null
+          },
+          "Work Sessions": {
+            "id": "%60%60YY",
+            "type": "relation",
+            "relation": [],
+            "has_more": false
+          },
+          "Total Sessions": {
+            "id": "hIiq",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "count_values"
+            }
+          },
+          "Category": {
+            "id": "oH%7CR",
+            "type": "rich_text",
+            "rich_text": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary",
+                "href": null
+              }
+            ]
+          },
+          "Completed Sessions": {
+            "id": "p%7CdD",
+            "type": "rollup",
+            "rollup": {
+              "type": "number",
+              "number": 0,
+              "function": "sum"
+            }
+          },
+          "Planned Start": {
+            "id": "%7DQma",
+            "type": "date",
+            "date": null
+          },
+          "Task Name": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Feedback Summary — M2 Collaborative",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Feedback Summary — M2 Collaborative",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Feedback-Summary-M2-Collaborative-36e54686ae1581f285a9c0ece59cae7f",
+        "public_url": null,
+        "archived": false,
+        "request_id": "3c8f0978-1c6f-4852-967f-caf9d699af5e"
+      },
+      "work_sessions": []
+    }
+  ]
+}

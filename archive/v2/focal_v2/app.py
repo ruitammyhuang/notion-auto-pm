@@ -1,0 +1,41 @@
+"""
+app.py
+──────
+Flask application factory.
+Import and call create_app() to get a configured Flask instance.
+"""
+
+from __future__ import annotations
+
+import os
+
+from flask import Flask, render_template
+
+
+def create_app() -> Flask:
+    """Create and configure the Flask app with all blueprints registered."""
+    # Point Flask at the templates/ folder inside this package
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(os.path.dirname(__file__), "templates"),
+    )
+
+    # ── Register blueprints ────────────────────────────────────────────────────
+    from .routes.config_routes    import bp as config_bp
+    from .routes.sync_routes      import bp as sync_bp
+    from .routes.task_routes      import bp as task_bp
+    from .routes.dashboard_routes import bp as dashboard_bp
+    from .routes.student_routes   import bp as student_bp
+
+    app.register_blueprint(config_bp)
+    app.register_blueprint(sync_bp)
+    app.register_blueprint(task_bp)
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(student_bp)
+
+    # ── Main UI route ──────────────────────────────────────────────────────────
+    @app.route("/")
+    def index():
+        return render_template("index.html")
+
+    return app

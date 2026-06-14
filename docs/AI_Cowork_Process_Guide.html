@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Co-Work Process Guide — Building the Faculty PM System</title>
+<style>
+  :root {
+    --bg: #fafaf9; --surface: #ffffff; --surface2: #f5f5f4;
+    --border: #e7e5e4; --accent: #2563eb; --accent2: #7c3aed;
+    --accent3: #059669; --accent4: #d97706; --accent5: #dc2626;
+    --text: #1c1917; --muted: #78716c; --muted2: #a8a29e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: var(--bg); color: var(--text); line-height: 1.7; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* Hero */
+  .hero { padding: 48px 0 36px; border-bottom: 2px solid var(--border); margin-bottom: 40px; }
+  .hero-tag { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .hero h1 { font-size: 28px; font-weight: 800; line-height: 1.2; margin-bottom: 10px; }
+  .hero-sub { font-size: 14px; color: var(--muted); max-width: 600px; }
+  .hero-meta { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; }
+  .hero-badge { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 100px; }
+  .badge-blue { background: #eff6ff; color: var(--accent); }
+  .badge-purple { background: #f5f3ff; color: var(--accent2); }
+  .badge-green { background: #f0fdf4; color: var(--accent3); }
+
+  /* Section labels */
+  .sec { margin-top: 48px; }
+  .sec-num { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+  .sec h2 { font-size: 21px; font-weight: 800; margin-bottom: 6px; }
+  .sec-intro { font-size: 14px; color: var(--muted); margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 14px; }
+  .card-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 10px; }
+  .card-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+  .card-title { font-size: 15px; font-weight: 700; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .card-body { font-size: 13px; color: var(--muted); line-height: 1.75; }
+  .card-body strong { color: var(--text); }
+  .card-body ul { margin: 8px 0 0 16px; }
+  .card-body li { margin-bottom: 4px; }
+
+  /* Timeline */
+  .timeline { position: relative; }
+  .timeline::before { content: ''; position: absolute; left: 18px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+  .tl-item { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 28px; position: relative; }
+  .tl-dot { width: 38px; min-width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; z-index: 1; border: 2px solid white; }
+  .tl-body { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .tl-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
+  .tl-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .tl-desc { font-size: 12px; color: var(--muted); line-height: 1.65; }
+  .tl-what-was-missing { margin-top: 10px; padding: 10px 12px; border-radius: 7px; background: #fef9ec; border: 1px solid #fde68a; font-size: 12px; color: #92400e; }
+  .tl-what-was-missing strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; color: #b45309; }
+
+  /* Before/After comparison */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .compare-col { border-radius: 10px; padding: 16px 18px; }
+  .compare-col.before { background: #fff1f2; border: 1px solid #fecdd3; }
+  .compare-col.after { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .compare-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+  .compare-col.before .compare-label { color: var(--accent5); }
+  .compare-col.after .compare-label { color: var(--accent3); }
+  .compare-col ul { margin-left: 14px; font-size: 12px; color: var(--text); }
+  .compare-col li { margin-bottom: 5px; line-height: 1.5; }
+
+  /* Checklist */
+  .checklist { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .checklist li { display: flex; gap: 12px; font-size: 13px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .check-num { width: 22px; min-width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .check-body strong { display: block; font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .check-body p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .check-body code { font-family: 'SF Mono', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; color: #374151; }
+
+  /* Insight boxes */
+  .insight { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; }
+  .insight.tip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+  .insight.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .insight.rule { background: #f5f3ff; border: 1px solid #ddd6fe; color: #4c1d95; }
+  .insight-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .insight strong { display: block; font-weight: 700; margin-bottom: 3px; }
+
+  /* Principle grid */
+  .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .pcard-num { font-size: 22px; font-weight: 800; color: var(--border); margin-bottom: 6px; }
+  .pcard h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .pcard p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .pcard-ex { margin-top: 8px; font-size: 11px; padding: 6px 10px; background: var(--surface2); border-radius: 6px; color: var(--muted); }
+  .pcard-ex strong { color: var(--text); }
+
+  @media(max-width:600px) { .compare, .pgrid { grid-template-columns: 1fr; } }
+
+  .footer { text-align: center; color: var(--muted2); font-size: 11px; margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; font-weight: 700; margin: 20px 0 10px; }
+  p { margin-bottom: 8px; }
+  code { font-family: 'SF Mono', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">Process Guide &amp; Retrospective</div>
+  <h1>Building a Productivity System with AI Co-Work</h1>
+  <p class="hero-sub">How the Faculty PM System was designed and built iteratively using Claude — what worked, what was missing, and how to do it better next time.</p>
+  <div class="hero-meta">
+    <span class="hero-badge badge-blue">Real retrospective</span>
+    <span class="hero-badge badge-purple">Reusable framework</span>
+    <span class="hero-badge badge-green">Teaching reference</span>
+  </div>
+</div>
+
+<!-- SECTION 1: WHAT WE BUILT -->
+<div class="sec">
+  <div class="sec-num">Section 1</div>
+  <h2>What Was Built &amp; How It Evolved</h2>
+  <p class="sec-intro">The system was not designed up-front — it grew iteratively over many sessions. Each session solved a concrete pain point and exposed the next one.</p>
+
+  <div class="timeline">
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#dbeafe;color:#1d4ed8">1</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#1d4ed8">Foundation</div>
+        <div class="tl-title">Core 3-layer Notion architecture</div>
+        <div class="tl-desc">Defined the conceptual model: Project WBS (where you plan) → Master WBS Tasks (where the tool writes) → Work Sessions (time log). Established one-directional sync, idempotent upserts via JSON mapping files, and the principle that status flows upward automatically from Work Sessions.</div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#f3e8ff;color:#6d28d9">2</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#6d28d9">Tool Build</div>
+        <div class="tl-title">Python/Flask sync tool (notion_wbs_sync.py)</div>
+        <div class="tl-desc">Built a ~3,000-line Flask web app with Setup, Sources, Sync, and Help tabs. The tool discovered WBS databases by title, mapped columns via a config file, and wrote normalized data to Master WBS. Value normalization handled the messiness of different project WBS conventions ("Todo" vs "Not Started" etc).</div>
+        <div class="tl-what-was-missing">
+          <strong>⚠ What was missing at this stage</strong>
+          No context management plan. Sessions grew huge as the tool grew, eventually hitting a 1M-token context limit mid-session. The MANIFEST.md and skill system weren't created until after this problem forced the issue.
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#dcfce7;color:#15803d">3</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#15803d">UX Layer</div>
+        <div class="tl-title">Quick Start tab — one-click task + session creation</div>
+        <div class="tl-desc">Added a Quick Start tab that creates a task in the Project WBS + Master WBS + Work Sessions in a single click. Later extended to support project-specific fields: Program Management got Category/Phase dropdowns, Professional Services got Service Level and Org/Division (with combobox for new values).</div>
+        <div class="tl-what-was-missing">
+          <strong>⚠ What was missing at this stage</strong>
+          The field variations across projects (some use "Task Type", some "Phase", some "Category") were not documented upfront. Each new project required a separate session to wire up its unique fields, causing repeated discovery work.
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#fef9c3;color:#a16207">4</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#a16207">Hierarchy Fix</div>
+        <div class="tl-title">Hub page structure standardized</div>
+        <div class="tl-desc">Discovered that hub pages were being placed at the wrong level in Notion's sidebar hierarchy. Research project hub pages should nest under their Research Projects DB row; hub pages must end with a WBS embedded DB + Work Sessions linked table. These rules had to be backfilled across existing projects.</div>
+        <div class="tl-what-was-missing">
+          <strong>⚠ What was missing at this stage</strong>
+          A template or standard was never defined before creating the first hub page. The structure was discovered through trial and error, then retroactively applied. Defining hub page templates before creating any projects would have saved multiple correction sessions.
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#fce7f3;color:#9d174d">5</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#9d174d">Context Crisis</div>
+        <div class="tl-title">Context limit hit → MANIFEST + skills created</div>
+        <div class="tl-desc">A long session adding Professional Services fields hit the 1M-token limit mid-task and had to be abandoned. This forced the creation of: (1) <code>_MANIFEST.md</code> — a tiered file index telling Claude which files to read and when; (2) skill files that encode pre-computed knowledge (DB IDs, field maps, line numbers) so each session doesn't re-derive everything from scratch.</div>
+        <div class="tl-what-was-missing">
+          <strong>⚠ What was missing at this stage</strong>
+          Context management should be designed on Day 1 of any AI co-work project, not after a crisis. A MANIFEST and a "what does Claude need to know per session" plan would have prevented this entirely.
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#f0f9ff;color:#0369a1">6</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#0369a1">API Discovery</div>
+        <div class="tl-title">Auto Status formula unreadable via Notion API</div>
+        <div class="tl-desc">The focus task list feature revealed that the Notion MCP returns formula field values as opaque <code>formulaResult://...</code> URLs, not the computed string. Tasks that were "Completed" appeared as still pending. The workaround: fetch each task's linked Work Sessions and inspect their Status fields directly — accurate but adds extra API calls.</div>
+        <div class="tl-what-was-missing">
+          <strong>⚠ What was missing at this stage</strong>
+          No API constraint audit was done before designing the Auto Status formula as the primary completion signal. If Notion API limitations had been surveyed first, the formula would have been designed differently (or a workaround pre-planned).
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#f5f3ff;color:#5b21b6">7</div>
+      <div class="tl-body">
+        <div class="tl-label" style="color:#5b21b6">Intelligence Layer</div>
+        <div class="tl-title">Skills, focus task list, workload dashboard</div>
+        <div class="tl-desc">Built reusable skills encoding domain knowledge: <code>notion-workload-query</code> (correct query patterns to avoid fetching all 241 sessions), <code>add-wbs-config-entry</code> (schema + common mistakes pre-encoded), <code>focus-task-list</code> (live prioritized task view on Notion Home), and <code>sync-tool-edit</code> (section map for the 3,000-line Python file). These make future sessions dramatically more efficient.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SECTION 2: WHAT WENT WRONG -->
+<div class="sec">
+  <div class="sec-num">Section 2</div>
+  <h2>Root Causes of Rework</h2>
+  <p class="sec-intro">Every correction session was traceable to one of five root causes. Understanding these lets you prevent them in future projects.</p>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">🏗️</div>
+      <div>
+        <div class="card-title">No upfront data model</div>
+        <div class="card-sub">Caused: hierarchy mistakes, retroactive session creation, backfilling rules</div>
+      </div>
+    </div>
+    <div class="card-body">
+      The three-layer model (WBS → Master → Sessions) was sound, but the <strong>relationships between entities</strong> weren't fully drawn before building. Questions like "what does a hub page contain?", "what does a Projects DB entry look like?", and "how do research projects differ from teaching projects?" were answered during construction, not before. Each answer required backfilling existing records.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">📋</div>
+      <div>
+        <div class="card-title">No template library defined at the start</div>
+        <div class="card-sub">Caused: inconsistent hub pages, repeated structural corrections</div>
+      </div>
+    </div>
+    <div class="card-body">
+      Hub page structure, WBS database schema, and Work Sessions section placement should have been a <strong>locked template</strong> before the first project was created. Instead, the standard was reverse-engineered from the best-looking existing page ("model page: Beyond the LXD Label hub") and then applied backward.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">🔌</div>
+      <div>
+        <div class="card-title">No API constraint audit</div>
+        <div class="card-sub">Caused: Auto Status formula workaround discovered late</div>
+      </div>
+    </div>
+    <div class="card-body">
+      The Notion API's formula field limitation (returns opaque URL, not computed value) was a known category of risk but wasn't tested before building the focus task list around it. A <strong>30-minute API constraint audit</strong> — fetch a test formula field and inspect the raw response — would have revealed this before it became a bug.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">🗂️</div>
+      <div>
+        <div class="card-title">No context management plan</div>
+        <div class="card-sub">Caused: 1M token limit hit, abandoned session, MANIFEST created reactively</div>
+      </div>
+    </div>
+    <div class="card-body">
+      AI co-work sessions accumulate context with every tool call. A 3,000-line file + config files + Notion API responses = context explosion. The <strong>MANIFEST.md tiering system and skill files</strong> were the right solution — but they should be created on Day 1, not after a crisis forces the issue.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">🔄</div>
+      <div>
+        <div class="card-title">Scope creep within single sessions</div>
+        <div class="card-sub">Caused: abandoned sessions, partial implementations</div>
+      </div>
+    </div>
+    <div class="card-body">
+      The session that hit the context limit was trying to add multiple fields (Level + Org/Division) in one go, on top of an already-large conversation. <strong>Each session should have a single, concrete deliverable.</strong> "Add Level field to Quick Start" is a session. "Add Level and Org/Division and update the config and test it" is three sessions.
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: IMPROVED PROCESS -->
+<div class="sec">
+  <div class="sec-num">Section 3</div>
+  <h2>The Improved AI Co-Work Process</h2>
+  <p class="sec-intro">A seven-phase framework for building a complex productivity system with AI. Each phase has a concrete deliverable that the AI can help produce.</p>
+
+  <ul class="checklist">
+    <li>
+      <div class="check-num">1</div>
+      <div class="check-body">
+        <strong>Phase: Problem &amp; Goal Scoping</strong>
+        <p>Before touching any tools, write a plain-language brief: What problem are you solving? Who uses this? What does "done" look like? What are the constraints (budget, tools, time)?<br>
+        <strong>AI role:</strong> Interview you about the problem space. Push back on vague goals. Produce a one-page brief you both agree on before any code.</p>
+      </div>
+    </li>
+    <li>
+      <div class="check-num">2</div>
+      <div class="check-body">
+        <strong>Phase: Data Model &amp; Entity Design</strong>
+        <p>Draw the entities, their fields, and their relationships. Decide on IDs, statuses, and what triggers what. This is the most important phase — every correction in the Faculty PM project traced back to skipping this.<br>
+        <strong>Deliverable:</strong> Entity diagram + field table. Every relationship is explicit. Every status transition is documented.</p>
+      </div>
+    </li>
+    <li>
+      <div class="check-num">3</div>
+      <div class="check-body">
+        <strong>Phase: API &amp; Platform Constraint Audit</strong>
+        <p>Before designing anything that reads from or writes to an external API, audit what the API can and cannot do. Fetch a sample response for every field type you plan to use. Check: formula fields, relation fields, rollup fields, file fields.<br>
+        <strong>For Notion specifically:</strong> Test formula field responses. Test relation filter behavior. Test what happens when you clear a filter via API. Document the gaps.</p>
+      </div>
+    </li>
+    <li>
+      <div class="check-num">4</div>
+      <div class="check-body">
+        <strong>Phase: Template &amp; Standard Library</strong>
+        <p>Before creating any instances, create the template. For a Notion-based system: define the hub page template, the WBS database schema template, the field naming conventions. Lock these before creating any projects.<br>
+        <strong>Why:</strong> Retroactively applying a standard across 5+ existing projects is 5× harder than setting it once at the start.</p>
+      </div>
+    </li>
+    <li>
+      <div class="check-num">5</div>
+      <div class="check-body">
+        <strong>Phase: Context Management Architecture</strong>
+        <p>On Day 1, decide how you'll manage AI session context for the life of the project. Create:<br>
+        (a) <code>_MANIFEST.md</code> — file index with tiered read policies<br>
+        (b) Skill files for every domain the AI will repeatedly work in<br>
+        (c) Session size discipline: one deliverable per session, fresh start for each task<br>
+        <strong>Rule of thumb:</strong> If a session makes more than 8-10 tool calls, consider splitting it.</p>
+      </div>
+    </li>
+    <li>
+      <div class="check-num">6</div>
+      <div class="check-body">
+        <strong>Phase: Incremental Build (Vertical Slices)</strong>
+        <p>Build the system in vertical slices — each slice is end-to-end functional, even if narrow. Slice 1 might be "sync one project's tasks to Master WBS." That's it. Test it. Then add Slice 2 (Work Sessions). Then Slice 3 (Quick Start).<br>
+        <strong>Never:</strong> Build the full schema + all projects + the UI + automation all in one session. Each session = one slice.</p>
+      </div>
+    </li>
+    <li>
+      <div class="check-num">7</div>
+      <div class="check-body">
+        <strong>Phase: Knowledge Crystallization</strong>
+        <p>After each significant build session, have the AI write a retrospective: what invariants were discovered, what rules were established, what edge cases were handled. This feeds back into skills and memory so future sessions don't re-derive it.<br>
+        <strong>Deliverable:</strong> Updated skill files, memory entries, and a design doc (like this one).</p>
+      </div>
+    </li>
+  </ul>
+</div>
+
+<!-- SECTION 4: PRINCIPLES -->
+<div class="sec">
+  <div class="sec-num">Section 4</div>
+  <h2>Principles for Effective AI Co-Work</h2>
+  <p class="sec-intro">Distilled from the Faculty PM System build. Applicable to any complex project with an AI collaborator.</p>
+
+  <div class="insight tip">
+    <span class="insight-icon">💡</span>
+    <div><strong>Treat the AI like a brilliant new hire, not a search engine.</strong> Give context, not just commands. The more you explain <em>why</em> something needs to be a certain way, the better the AI's judgment on edge cases you didn't anticipate.</div>
+  </div>
+
+  <div class="insight warn">
+    <span class="insight-icon">⚠️</span>
+    <div><strong>Context is the most finite resource.</strong> Every tool call, every file read, every API response costs context tokens. Design your project so the AI can complete a useful task in 5–8 tool calls. If it regularly takes 15+, your session scope is too broad.</div>
+  </div>
+
+  <div class="insight rule">
+    <span class="insight-icon">📐</span>
+    <div><strong>Never spec in the building phase.</strong> If you're discovering requirements while the AI is coding, you're wasting time. Finish the spec (even a rough one) before the first line of code. The AI is very good at helping you write the spec — use it for that first.</div>
+  </div>
+
+  <div class="pgrid" style="margin-top:20px">
+    <div class="pcard">
+      <div class="pcard-num">01</div>
+      <h4>One Session, One Deliverable</h4>
+      <p>Define the single thing this session will produce before starting. Not "improve the system" — "add a Level dropdown to Professional Services Quick Start." When it's done, stop.</p>
+      <div class="pcard-ex"><strong>Bad:</strong> "Add Level, Org/Division, update config, and test" &nbsp;&nbsp;<strong>Good:</strong> "Add Level dropdown to Quick Start (one session), then Org/Division (next session)"</div>
+    </div>
+    <div class="pcard">
+      <div class="pcard-num">02</div>
+      <h4>Write Invariants, Not Just Requirements</h4>
+      <p>For every rule the system must follow, write it as an invariant: "Status is ONLY written on CREATE, never on UPDATE." This framing forces you to think about edge cases before they become bugs.</p>
+      <div class="pcard-ex"><strong>Example:</strong> "Deleted source tasks are NOT removed from Master WBS" — this isn't obvious from requirements, but it's a critical invariant for data integrity.</div>
+    </div>
+    <div class="pcard">
+      <div class="pcard-num">03</div>
+      <h4>Test the API Before Designing Around It</h4>
+      <p>Any time your design depends on a specific API behavior, verify it empirically before committing. Do a quick test call and inspect the raw response. Don't trust documentation or assumptions.</p>
+      <div class="pcard-ex"><strong>Cost of not doing this:</strong> The Notion formula field limitation wasn't caught until the focus task list was already built around it.</div>
+    </div>
+    <div class="pcard">
+      <div class="pcard-num">04</div>
+      <h4>Skill-ify Repeated Work</h4>
+      <p>Any task you expect to repeat more than twice should become a skill. "Create a new project" became the <code>notion-new-project</code> skill. This moves the knowledge out of your session context and into a reusable file.</p>
+      <div class="pcard-ex"><strong>Rule of thumb:</strong> If you find yourself re-reading the same file at the start of multiple sessions, that file's content should be a skill.</div>
+    </div>
+    <div class="pcard">
+      <div class="pcard-num">05</div>
+      <h4>Ship a Vertical Slice First</h4>
+      <p>Start with the simplest version that's fully functional end-to-end. One project, one WBS, one sync, one session. Prove the architecture works before adding complexity.</p>
+      <div class="pcard-ex"><strong>For the Faculty PM System:</strong> "Sync EDG 6648 WBS to Master WBS Tasks" should have been v1. The multi-project config came after proof of concept.</div>
+    </div>
+    <div class="pcard">
+      <div class="pcard-num">06</div>
+      <h4>Document Decisions, Not Just Outcomes</h4>
+      <p>Every non-obvious design decision should be documented with its rationale. Future sessions — and future you — need to know <em>why</em>, not just <em>what</em>. Skills and memory files are the right place.</p>
+      <div class="pcard-ex"><strong>Example:</strong> "Status written only on CREATE — protects Auto Status formula from being overwritten by sync" explains both the rule and why breaking it causes a bug.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: BEFORE YOU START CHECKLIST -->
+<div class="sec">
+  <div class="sec-num">Section 5</div>
+  <h2>"Before You Start" Checklist for AI-Assisted System Projects</h2>
+  <p class="sec-intro">Use this checklist at the start of any new productivity/automation project you're building with an AI collaborator. These are the questions this project had to answer reactively — answer them proactively.</p>
+
+  <h3>🏗 Architecture &amp; Data Model</h3>
+  <ul style="margin-left:20px;font-size:13px;color:var(--muted);margin-bottom:20px">
+    <li style="margin-bottom:6px">What are the core entities? What fields does each have?</li>
+    <li style="margin-bottom:6px">What are the relationships between entities? (one-to-many, many-to-many?)</li>
+    <li style="margin-bottom:6px">What are the unique identifiers for each entity?</li>
+    <li style="margin-bottom:6px">What triggers what? (e.g., "completing a session triggers a status update")</li>
+    <li style="margin-bottom:6px">What is the canonical source of truth for each field?</li>
+    <li style="margin-bottom:6px">What are the status lifecycle states and valid transitions?</li>
+  </ul>
+
+  <h3>🔌 Platform &amp; API</h3>
+  <ul style="margin-left:20px;font-size:13px;color:var(--muted);margin-bottom:20px">
+    <li style="margin-bottom:6px">Which field types am I using? Have I fetched a raw API response for each?</li>
+    <li style="margin-bottom:6px">What actions are NOT supported via API? (formula reads, relation filters, file uploads?)</li>
+    <li style="margin-bottom:6px">What are the rate limits and pagination behaviors?</li>
+    <li style="margin-bottom:6px">What API responses does "success" look like? What does "silent failure" look like?</li>
+  </ul>
+
+  <h3>📋 Templates &amp; Standards</h3>
+  <ul style="margin-left:20px;font-size:13px;color:var(--muted);margin-bottom:20px">
+    <li style="margin-bottom:6px">What does a standard "project" look like? (hub page, database, linked tables)</li>
+    <li style="margin-bottom:6px">What naming conventions will I use for databases, fields, and files?</li>
+    <li style="margin-bottom:6px">What is the required structure of every instance? (e.g., every hub page ends with WBS + Work Sessions)</li>
+    <li style="margin-bottom:6px">Can I create one complete "model" instance before creating any others?</li>
+  </ul>
+
+  <h3>🗂 Context &amp; Session Management</h3>
+  <ul style="margin-left:20px;font-size:13px;color:var(--muted);margin-bottom:20px">
+    <li style="margin-bottom:6px">Which files will the AI need to read repeatedly? → Put them in Tier 1 of MANIFEST.</li>
+    <li style="margin-bottom:6px">Which knowledge will be needed in every session? → Make it a skill.</li>
+    <li style="margin-bottom:6px">What is the largest single file in my project? → The AI should never read it in full.</li>
+    <li style="margin-bottom:6px">What is the session size discipline? (one deliverable per session)</li>
+  </ul>
+
+  <h3>📐 Invariants &amp; Rules</h3>
+  <ul style="margin-left:20px;font-size:13px;color:var(--muted);margin-bottom:20px">
+    <li style="margin-bottom:6px">What can NEVER happen? (e.g., never edit Master WBS directly)</li>
+    <li style="margin-bottom:6px">What must ALWAYS happen? (e.g., every project must have a Projects DB entry)</li>
+    <li style="margin-bottom:6px">What is the idempotency strategy? (how do repeated runs stay safe?)</li>
+    <li style="margin-bottom:6px">What is the data retention policy? (deleted records — remove or archive?)</li>
+  </ul>
+</div>
+
+<!-- SECTION 6: QUICK REFERENCE -->
+<div class="sec">
+  <div class="sec-num">Section 6</div>
+  <h2>Skills Reference — What Each Skill Prevents</h2>
+  <p class="sec-intro">Each skill in this project encodes the lesson from a specific failure mode. This table shows the connection.</p>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:var(--surface2)">
+          <th style="text-align:left;padding:10px 16px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border)">Skill</th>
+          <th style="text-align:left;padding:10px 16px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border)">What it prevents</th>
+          <th style="text-align:left;padding:10px 16px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border)">Root failure</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:10px 16px;border-bottom:1px solid var(--border)"><code>sync-tool-edit</code></td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Reading the full 3,130-line Python file to find edit locations</td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Context explosion from large file reads</td></tr>
+        <tr><td style="padding:10px 16px;border-bottom:1px solid var(--border)"><code>notion-new-project</code></td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Wrong hub page placement, missing Projects DB entry, missing Work Sessions section</td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">No standard template defined at start</td></tr>
+        <tr><td style="padding:10px 16px;border-bottom:1px solid var(--border)"><code>add-wbs-config-entry</code></td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Wrong UUID format, missing backlink_field, field name mismatches</td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Field naming variations not documented upfront</td></tr>
+        <tr><td style="padding:10px 16px;border-bottom:1px solid var(--border)"><code>notion-workload-query</code></td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Fetching all 241 sessions instead of filtered subsets; wrong query starting point</td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">API query patterns re-discovered in each session</td></tr>
+        <tr><td style="padding:10px 16px;border-bottom:1px solid var(--border)"><code>focus-task-list</code></td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">Relying on unreadable Auto Status formula; tasks appearing as pending when complete</td><td style="padding:10px 16px;border-bottom:1px solid var(--border);color:var(--muted)">API constraint not audited before using formula field</td></tr>
+        <tr><td style="padding:10px 16px"><code>_MANIFEST.md</code></td><td style="padding:10px 16px;color:var(--muted)">Reading large Tier 2/3 files into context unnecessarily</td><td style="padding:10px 16px;color:var(--muted)">No context management plan on Day 1</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="footer">AI Co-Work Process Guide &middot; Faculty PM System Retrospective &middot; June 2026</div>
+</div>
+</body>
+</html>
