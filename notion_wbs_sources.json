@@ -1,0 +1,176 @@
+{
+  "001e7ca9-a7b8-4180-9dd8-0fc29fa00836": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "📋 WBS — EDG 6648 Summer 2026 Instruction",
+    "field_map": {
+      "category": "Category",
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "36b54686-ae15-80ce-a660-d94c22bdc8ed"
+  },
+  "48cc032e-c2d9-4fdd-98d6-b3c4a42aba27": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — Beyond the LXD Label Scoping Review",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "36e54686-ae15-814f-a1d7-db14785cd5fc"
+  },
+  "53cdd7a1-5f5d-4531-b153-be639ec435c2": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — Program Management",
+    "field_map": {
+      "category": "Category",
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "37454686-ae15-817f-a40d-cf340a0dc0b2"
+  },
+  "54631775-3dac-47db-8b5f-1f7b9aa57073": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — EME 6209 Fall 2026 Instruction",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "37b54686-ae15-8144-a4e4-d78a6167e5b2"
+  },
+  "720d2e4d-ef4f-47c6-a095-8751449238ae": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — EME 6156 Fall 2026 Instruction",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "37c54686-ae15-8125-a5e3-dd27be3a7f4f"
+  },
+  "79345a33-0f69-4b5c-a4fc-0b94e30854d1": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — CS Ed EdD Cohort 2 Year 1 Summer Workshop 2026",
+    "field_map": {
+      "category": "Category",
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "37454686-ae15-819e-83b7-daaba02d7a51"
+  },
+  "8ca11592-2c3e-4779-a343-37f1756412ec": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — AI & PjBL Scoping Review",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "https://app.notion.com/p/37654686ae1581c397dff990af1580c4",
+    "project_id": "37654686-ae15-814e-bd5b-d5527b022dcd"
+  },
+  "8d83590f-0a15-4fb4-9ba5-54568c27555b": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — Professional Services",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "37554686-ae15-815b-8981-e4a549166c6d"
+  },
+  "b4f7bdc6-365a-429b-a240-8d958f888ecd": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "📋 WBS — EDG 6648 Course Design",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "36a54686-ae15-80a0-a85c-f536878e61e9"
+  },
+  "cd502046-314d-43cb-a2e9-1e4c1f59f2b8": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "📋 WBS - CS+AI Competency Job Posts Analysis",
+    "field_map": {
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Start Date",
+      "priority": "Priority",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "36b54686-ae15-80b4-99c2-cc34c8050f11"
+  },
+  "f0c29cac-ec31-45fa-9193-85567f4d0d77": {
+    "auto_calc_planned_start": 7,
+    "backlink_field": "Master WBS",
+    "db_title": "WBS — Dissertation Mentoring",
+    "field_map": {
+      "chair": "Chair",
+      "current_phase": "Current Phase",
+      "degree": "Degree",
+      "my_role": "My Role",
+      "notes": "Notes",
+      "planned_end": "Due Date",
+      "planned_start": "Planned Start",
+      "priority": "Priority",
+      "program": "Program",
+      "student_name": "Student Name",
+      "task_name": "Task",
+      "work_type": "Work Type"
+    },
+    "hub_page_url": "",
+    "project_id": "37754686-ae15-81c7-8715-f86452b3fb9f"
+  }
+}

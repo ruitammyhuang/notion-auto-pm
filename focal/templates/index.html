@@ -291,6 +291,7 @@
   <div class="tab" onclick="switchTab('sync')">▶️ Sync</div>
   <div class="tab" onclick="switchTab('quick')">⚡ Work Session Tasks</div>
   <div class="tab" onclick="switchTab('students')">🎓 Students</div>
+  <div class="tab" onclick="switchTab('orphans')">🔍 Orphan Audit</div>
   <div class="tab" onclick="switchTab('help')">❓ Help</div>
   <div class="tab" onclick="window.open('/design','_blank')">📐 Design Doc</div>
 </div>
@@ -528,8 +529,18 @@
 
     <!-- Existing tasks results panel -->
     <div id="qs-existing-panel" style="display:none;margin-bottom:16px;">
-      <div style="font-size:12px;font-weight:600;color:#4a5568;letter-spacing:.3px;text-transform:uppercase;margin-bottom:8px;">
-        Active tasks in this project
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#4a5568;letter-spacing:.3px;text-transform:uppercase;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="qs-select-all-cb" onchange="toggleSelectAllDelete(this.checked)"
+                 style="width:14px;height:14px;cursor:pointer;">
+          Active tasks in this project
+        </label>
+        <button id="qs-delete-selected-btn" class="btn"
+                onclick="runBatchDelete()"
+                disabled
+                style="font-size:12px;padding:4px 12px;background:#fff5f5;color:#c53030;border-color:#fed7d7;white-space:nowrap;opacity:.5;">
+          🗑 Delete Selected (<span id="qs-delete-count">0</span>)
+        </button>
       </div>
       <div id="qs-existing-list"></div>
       <div id="qs-existing-empty" style="display:none;font-size:13px;color:#718096;padding:8px 0;">
@@ -713,15 +724,38 @@
     </div>
 
     <div class="field-group" style="margin-top:14px;">
-      <label>Work Type <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        Work Type <span style="font-weight:400;color:#888;">(optional)</span>
+        <button type="button" onclick="toggleWorkTypeRef()"
+                style="background:none;border:1px solid #cbd5e0;border-radius:50%;
+                       width:18px;height:18px;font-size:11px;cursor:pointer;
+                       color:#718096;line-height:1;padding:0;flex-shrink:0;"
+                title="Show Work Type descriptions">?</button>
+      </label>
       <select id="qs-work-type">
         <option value="">— leave blank —</option>
-        <option value="🔵 Deep Work">🔵 Deep Work</option>
-        <option value="🟡 Meeting &amp; Call">🟡 Meeting &amp; Call</option>
-        <option value="🟠 Admin &amp; Ops">🟠 Admin &amp; Ops</option>
-        <option value="🟢 Communication">🟢 Communication</option>
+        <option value="✍️ Writing">✍️ Writing</option>
+        <option value="🔍 Analysis">🔍 Analysis</option>
+        <option value="📐 Design &amp; Build">📐 Design &amp; Build</option>
+        <option value="✅ Review &amp; Assessment">✅ Review &amp; Assessment</option>
+        <option value="🤝 Meeting">🤝 Meeting</option>
+        <option value="⚙️ Admin">⚙️ Admin</option>
+        <option value="📣 Communication">📣 Communication</option>
       </select>
-      <div class="field-hint">Sets Work Type on the Master WBS task so time-tracking by type is pre-filled.</div>
+      <!-- Work Type reference card -->
+      <div id="work-type-ref" style="display:none;margin-top:8px;padding:10px 12px;
+           background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;
+           line-height:1.7;color:#4a5568;">
+        <strong style="display:block;margin-bottom:4px;color:#2d3748;">Work Type guide</strong>
+        <div><strong>✍️ Writing</strong> — producing text: manuscripts, syllabi, scripts, announcements, proposals</div>
+        <div><strong>🔍 Analysis</strong> — processing information: literature review, data coding, synthesis, EDA</div>
+        <div><strong>📐 Design &amp; Build</strong> — creating artifacts: course modules, rubrics, assignment pages, Canvas setup</div>
+        <div><strong>✅ Review &amp; Assessment</strong> — evaluating work: grading, peer review, feedback, discussion monitoring</div>
+        <div><strong>🤝 Meeting</strong> — synchronous interaction: team meetings, advising sessions, planning calls</div>
+        <div><strong>⚙️ Admin</strong> — operational tasks: forms, submissions, logistics, scheduling, registrations</div>
+        <div><strong>📣 Communication</strong> — async outreach: emails, invitations, announcements, recruitment</div>
+      </div>
+      <div class="field-hint">Sets Work Type on the task for workload dashboard tracking.</div>
     </div>
 
     <div class="field-group">
@@ -878,6 +912,46 @@
     </div>
   </div>
 
+  <!-- Delete task confirmation modal -->
+  <div id="delete-confirm-backdrop"
+       style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;
+              align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:28px 28px 24px;width:440px;
+                max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.22);">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <span style="font-size:20px;line-height:1;">🗑</span>
+        <div>
+          <div style="font-size:15px;font-weight:600;color:#c53030;margin-bottom:4px;">Confirm Deletion</div>
+          <div style="font-size:13px;color:#2d3748;margin-bottom:4px;">
+            Task: <strong id="delete-modal-task-name" style="color:#1a202c;"></strong>
+          </div>
+          <div style="font-size:12px;color:#718096;line-height:1.5;">
+            This will archive the <strong>Work Session</strong>,
+            <strong>Master WBS entry</strong>, and <strong>Project WBS row</strong>.
+            This cannot be undone from this tool.
+          </div>
+        </div>
+      </div>
+      <div id="delete-modal-status" style="display:none;font-size:12px;color:#718096;
+           margin-bottom:10px;padding:6px 10px;background:#f7fafc;border-radius:6px;">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;">
+        <button id="delete-modal-confirm-btn" class="btn"
+                style="background:#c53030;color:#fff;border-color:#c53030;font-size:13px;padding:6px 14px;">
+          ✅ Confirm Deletion
+        </button>
+        <button id="delete-modal-skip-btn" class="btn btn-ghost"
+                style="font-size:13px;padding:6px 14px;">
+          ⏭ Skip This
+        </button>
+        <button id="delete-modal-skipall-btn" class="btn btn-ghost"
+                style="font-size:13px;padding:6px 14px;color:#718096;">
+          🚫 Skip All
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit / Add modal -->
   <div id="student-modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:10px;padding:28px;width:480px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.18);max-height:90vh;overflow-y:auto;">
@@ -957,6 +1031,130 @@
     </div>
   </div>
 </div>
+
+<!-- ── ORPHAN AUDIT TAB ───────────────────────────────────────────────────── -->
+<div id="pane-orphans" class="pane">
+
+  <!-- Header + Run button -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h3 style="margin:0 0 6px;">🔍 Orphan Audit</h3>
+        <div class="hint">
+          Scans all Work Sessions, Master WBS Tasks, and the local mapping file for broken
+          links across your 7 orphan categories. Auto-fixable items are cleaned up in bulk;
+          items with logged hours go to a review queue. A backup is always written before
+          any changes are made.
+        </div>
+      </div>
+      <button class="btn btn-primary" id="orphan-run-btn" onclick="runOrphanAudit()"
+              style="min-width:130px;white-space:nowrap;">
+        ▶ Run Audit
+      </button>
+    </div>
+
+    <!-- Progress panel -->
+    <div id="orphan-progress" style="display:none;margin-top:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+        <span id="orphan-phase-label" style="font-size:13px;font-weight:600;color:#4a5568;"></span>
+        <span id="orphan-pct-label"   style="font-size:12px;color:#a0aec0;"></span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:99px;height:7px;overflow:hidden;margin-bottom:8px;">
+        <div id="orphan-progress-bar"
+             style="background:linear-gradient(90deg,#f6ad55,#ed8936);height:100%;width:0%;
+                    transition:width .3s ease;border-radius:99px;"></div>
+      </div>
+      <div id="orphan-log"
+           style="background:#1a202c;border-radius:6px;padding:8px 10px;font-size:11px;
+                  font-family:monospace;max-height:120px;overflow-y:auto;color:#e2e8f0;
+                  line-height:1.7;"></div>
+    </div>
+  </div>
+
+  <!-- Results — hidden until audit completes -->
+  <div id="orphan-results" style="display:none;">
+
+    <!-- Summary row -->
+    <div class="card" style="padding:14px 18px;">
+      <div style="font-size:12px;font-weight:600;color:#718096;letter-spacing:.05em;
+                  text-transform:uppercase;margin-bottom:10px;">Audit Summary</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;" id="orphan-summary-badges"></div>
+      <div style="font-size:11px;color:#a0aec0;margin-top:10px;" id="orphan-generated-at"></div>
+    </div>
+
+    <!-- Auto-fixable section -->
+    <div class="card" id="orphan-auto-card" style="display:none;border-color:#c6f6d5;background:#f0fff4;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="margin:0;color:#276749;">✅ Auto-fixable</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12px;color:#276749;cursor:pointer;">
+            <input type="checkbox" id="orphan-select-all" onchange="orphanSelectAll(this.checked)"
+                   style="margin-right:4px;">
+            Select all
+          </label>
+          <button class="btn" onclick="orphanFixSelected()"
+                  style="background:#38a169;color:#fff;font-size:12px;padding:5px 14px;">
+            Archive Selected
+          </button>
+        </div>
+      </div>
+      <div class="hint" style="color:#276749;margin-bottom:12px;">
+        No logged hours — safe to clean up automatically. A backup is written before archiving.
+      </div>
+      <div id="orphan-auto-list"></div>
+    </div>
+
+    <!-- Review queue section -->
+    <div class="card" id="orphan-review-card" style="display:none;border-color:#fefcbf;background:#fffff0;">
+      <h3 style="margin:0 0 8px;color:#744210;">⚠️ Review Queue</h3>
+      <div class="hint" style="color:#744210;margin-bottom:14px;">
+        These items have logged hours or require your judgment. Archive or keep each one individually.
+      </div>
+      <div id="orphan-review-list"></div>
+    </div>
+
+    <!-- Warnings section -->
+    <div class="card" id="orphan-warnings-card" style="display:none;border-color:#bee3f8;background:#ebf8ff;">
+      <h3 style="margin:0 0 8px;color:#2c5282;">ℹ️ Warnings</h3>
+      <div class="hint" style="color:#2c5282;margin-bottom:14px;">
+        Informational only — no automated action taken. Investigate these manually.
+      </div>
+      <div id="orphan-warnings-list"></div>
+    </div>
+
+    <!-- Healthy state -->
+    <div class="card" id="orphan-healthy-card" style="display:none;text-align:center;padding:32px;">
+      <div style="font-size:36px;margin-bottom:8px;">✅</div>
+      <div style="font-size:16px;font-weight:600;color:#276749;">Everything looks healthy!</div>
+      <div style="font-size:13px;color:#718096;margin-top:6px;">
+        No orphaned sessions or broken links detected.
+      </div>
+    </div>
+
+    <!-- Restore section -->
+    <div class="card" style="border-color:#e2e8f0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;"
+           onclick="orphanToggleRestore()">
+        <h3 style="margin:0;color:#4a5568;font-size:14px;">↩ Restore from Backup</h3>
+        <span id="orphan-restore-chevron" style="color:#a0aec0;font-size:13px;">▼</span>
+      </div>
+      <div id="orphan-restore-panel" style="display:none;margin-top:14px;">
+        <div class="hint" style="margin-bottom:10px;">
+          If an archive action was a mistake, select a backup file to restore the pages.
+          Note: the local mapping file won't be rebuilt — re-run a sync after restoring.
+        </div>
+        <div id="orphan-backup-list"
+             style="font-size:12px;color:#4a5568;margin-bottom:10px;max-height:150px;
+                    overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:8px;
+                    background:#fff;"></div>
+        <button class="btn btn-ghost" style="font-size:12px;" onclick="orphanLoadBackups()">
+          🔄 Refresh Backup List
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /orphan-results -->
+</div><!-- /pane-orphans -->
 
 <!-- ── HELP TAB ──────────────────────────────────────────────────────────── -->
 <div id="pane-help" class="pane">
@@ -1049,9 +1247,10 @@
     <p style="font-size:13px;line-height:1.7;color:#444;">
       If your source WBS has a Category column instead of a Work Type column, paste a
       JSON map in the <em>Work Type override</em> field to translate automatically:<br>
-      <code>{"Weekly Announcement": "🟢 Communication", "Grading": "🔵 Deep Work"}</code><br><br>
-      Valid master Work Type values: <strong>🔵 Deep Work</strong>, <strong>🟡 Meeting &amp; Call</strong>,
-      <strong>🟠 Admin &amp; Ops</strong>, <strong>🟢 Communication</strong>.
+      <code>{"Weekly Announcement": "📣 Communication", "Grading": "✅ Review &amp; Assessment"}</code><br><br>
+      Valid Work Type values: <strong>✍️ Writing</strong>, <strong>🔍 Analysis</strong>,
+      <strong>📐 Design &amp; Build</strong>, <strong>✅ Review &amp; Assessment</strong>,
+      <strong>🤝 Meeting</strong>, <strong>⚙️ Admin</strong>, <strong>📣 Communication</strong>.
     </p>
 
     <hr>
@@ -1956,11 +2155,23 @@ async function checkExistingTasks() {
 
     const pColor = prioColor[t.priority] || "#4a5568";
     const card   = document.createElement("div");
+    card.dataset.wsId = t.id;
     card.style.cssText =
       "display:flex;align-items:center;gap:10px;padding:8px 10px;" +
       "border-radius:6px;border:1px solid #e2e8f0;margin-bottom:6px;" +
       "font-size:13px;background:#fff;";
-    card.innerHTML = `
+
+    // Checkbox (left)
+    const cb = document.createElement("input");
+    cb.type            = "checkbox";
+    cb.className       = "qs-delete-cb";
+    cb.dataset.wsId    = t.id;
+    cb.dataset.name    = t.name;
+    cb.style.cssText   = "width:14px;height:14px;flex-shrink:0;cursor:pointer;";
+    cb.addEventListener("change", updateDeleteSelectionCount);
+    card.appendChild(cb);
+
+    card.innerHTML += `
       <div style="flex:1;min-width:0;">
         <div style="font-weight:500;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
           <a href="${escHtml(t.url)}" target="_blank"
@@ -1978,11 +2189,11 @@ async function checkExistingTasks() {
       </div>
     `;
 
-    // Build the Load button via DOM — avoids double-quote escaping issues with inline onclick
+    // Load button (right)
     const loadBtn = document.createElement("button");
-    loadBtn.className   = "btn btn-primary";
+    loadBtn.className     = "btn btn-primary";
     loadBtn.style.cssText = "font-size:12px;white-space:nowrap;flex-shrink:0;padding:5px 10px;";
-    loadBtn.textContent = "↩ Load";
+    loadBtn.textContent   = "↩ Load";
     loadBtn.addEventListener("click", () => selectExistingTask(
       t.id, t.name, t.url,
       t.priority || "Normal",
@@ -1994,6 +2205,127 @@ async function checkExistingTasks() {
     list.appendChild(card);
   }
 }
+
+// ── Delete selection helpers ───────────────────────────────────────────────────
+
+function updateDeleteSelectionCount() {
+  const checked = document.querySelectorAll(".qs-delete-cb:checked").length;
+  const total   = document.querySelectorAll(".qs-delete-cb").length;
+  const btn     = document.getElementById("qs-delete-selected-btn");
+  const countEl = document.getElementById("qs-delete-count");
+
+  if (countEl) countEl.textContent = checked;
+
+  if (btn) {
+    btn.disabled         = checked === 0;
+    btn.style.opacity    = checked === 0 ? ".5" : "1";
+  }
+
+  // Sync the select-all checkbox tri-state
+  const allCb = document.getElementById("qs-select-all-cb");
+  if (allCb) {
+    allCb.indeterminate = checked > 0 && checked < total;
+    allCb.checked       = total > 0 && checked === total;
+  }
+}
+
+function toggleSelectAllDelete(checked) {
+  document.querySelectorAll(".qs-delete-cb").forEach(cb => { cb.checked = checked; });
+  updateDeleteSelectionCount();
+}
+
+// Returns a Promise that resolves to 'confirm' | 'skip' | 'skip-all'
+function showDeleteConfirmModal(taskName) {
+  return new Promise(resolve => {
+    document.getElementById("delete-modal-task-name").textContent = taskName;
+    document.getElementById("delete-modal-status").style.display  = "none";
+
+    const backdrop  = document.getElementById("delete-confirm-backdrop");
+    const confirmBtn  = document.getElementById("delete-modal-confirm-btn");
+    const skipBtn     = document.getElementById("delete-modal-skip-btn");
+    const skipAllBtn  = document.getElementById("delete-modal-skipall-btn");
+
+    // Re-enable buttons in case a previous delete left them disabled
+    [confirmBtn, skipBtn, skipAllBtn].forEach(b => { b.disabled = false; });
+
+    backdrop.style.display = "flex";
+
+    function cleanup() {
+      backdrop.style.display = "none";
+      confirmBtn.onclick  = null;
+      skipBtn.onclick     = null;
+      skipAllBtn.onclick  = null;
+    }
+
+    confirmBtn.onclick  = () => { cleanup(); resolve("confirm"); };
+    skipBtn.onclick     = () => { cleanup(); resolve("skip"); };
+    skipAllBtn.onclick  = () => { cleanup(); resolve("skip-all"); };
+  });
+}
+
+async function runBatchDelete() {
+  const checked = [...document.querySelectorAll(".qs-delete-cb:checked")];
+  if (!checked.length) return;
+
+  // Snapshot the list now; DOM cards will be removed as we go
+  const tasks = checked.map(cb => ({
+    wsId: cb.dataset.wsId,
+    name: cb.dataset.name,
+    card: cb.closest("[data-ws-id]"),
+  }));
+
+  const actionBtn = document.getElementById("qs-delete-selected-btn");
+  actionBtn.disabled = true;
+
+  let deleted = 0, skipped = 0, errors = 0;
+
+  for (const task of tasks) {
+    const choice = await showDeleteConfirmModal(task.name);
+
+    if (choice === "skip-all") break;
+    if (choice === "skip")     { skipped++; continue; }
+
+    // choice === "confirm" — show in-progress state in modal
+    const statusEl   = document.getElementById("delete-modal-status");
+    const confirmBtn = document.getElementById("delete-modal-confirm-btn");
+    const skipBtn    = document.getElementById("delete-modal-skip-btn");
+    const skipAllBtn = document.getElementById("delete-modal-skipall-btn");
+    statusEl.style.display = "block";
+    statusEl.textContent   = "Deleting…";
+    [confirmBtn, skipBtn, skipAllBtn].forEach(b => { b.disabled = true; });
+
+    const res = await api("POST", "/api/delete-task", { ws_id: task.wsId });
+
+    document.getElementById("delete-confirm-backdrop").style.display = "none";
+
+    if (res.ok) {
+      task.card?.remove();
+      deleted++;
+    } else {
+      errors++;
+      // Brief inline error before moving on
+      if (!confirm(`Error deleting "${task.name}": ${res.error}\n\nContinue with remaining tasks?`)) break;
+    }
+  }
+
+  updateDeleteSelectionCount();
+
+  // Show summary in list area if anything happened
+  if (deleted > 0 || skipped > 0 || errors > 0) {
+    const parts = [];
+    if (deleted) parts.push(`${deleted} deleted`);
+    if (skipped) parts.push(`${skipped} skipped`);
+    if (errors)  parts.push(`${errors} failed`);
+    const summary = document.createElement("div");
+    summary.style.cssText = "font-size:12px;color:#4a5568;padding:6px 10px;background:#f7fafc;" +
+                            "border-radius:6px;border:1px solid #e2e8f0;margin-top:4px;";
+    summary.textContent = "Result: " + parts.join(", ") + ".";
+    document.getElementById("qs-existing-list").appendChild(summary);
+  }
+
+  actionBtn.disabled = false;
+}
+
 
 function selectExistingTask(taskId, taskName, taskUrl, priority, workType, plannedEnd) {
   window._qsSelectedTask = {id: taskId, name: taskName, url: taskUrl};
@@ -2362,6 +2694,11 @@ function onQsCategoryChange() {
   }
 }
 
+function toggleWorkTypeRef() {
+  const el = document.getElementById("work-type-ref");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
 function setQsNow() {
   const now = new Date();
   // datetime-local format: YYYY-MM-DDTHH:MM
@@ -2627,7 +2964,7 @@ async function runPushToWbs() {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t,i)=> {
-    const names = ["setup","sources","sync","quick","students","help"];
+    const names = ["setup","sources","sync","quick","students","orphans","help",""];
     t.classList.toggle("active", names[i]===name);
   });
   document.querySelectorAll(".pane").forEach(p => {
@@ -2636,6 +2973,356 @@ function switchTab(name) {
   if (name === "sync")     refreshSyncTab();
   if (name === "quick")    refreshQuickTab();
   if (name === "students") refreshStudentsTab();
+  if (name === "orphans")  orphanTabOpened();
+}
+
+// ── Orphan Audit tab ──────────────────────────────────────────────────────────
+
+let _orphanAuditResult = null;   // cached last result
+let _orphanReviewState = {};     // itemId → "keep" | "archive"
+
+function orphanTabOpened() {
+  // Nothing to auto-run; user must click Run Audit manually
+}
+
+function runOrphanAudit() {
+  const btn       = document.getElementById("orphan-run-btn");
+  const progress  = document.getElementById("orphan-progress");
+  const results   = document.getElementById("orphan-results");
+  const phaseEl   = document.getElementById("orphan-phase-label");
+  const pctEl     = document.getElementById("orphan-pct-label");
+  const bar       = document.getElementById("orphan-progress-bar");
+  const logEl     = document.getElementById("orphan-log");
+
+  btn.disabled    = true;
+  btn.textContent = "⏳ Scanning…";
+  progress.style.display = "block";
+  results.style.display  = "none";
+  logEl.innerHTML = "";
+
+  fetch("/api/orphan-audit/start", { method: "POST" })
+    .then(r => r.json())
+    .then(({ job_id, error }) => {
+      if (error) { orphanAuditError(error); return; }
+
+      const es = new EventSource(`/api/orphan-audit/stream/${job_id}`);
+      es.onmessage = (e) => {
+        const evt = JSON.parse(e.data);
+
+        if (evt.type === "progress" || evt.type === "done") {
+          phaseEl.textContent = evt.msg || "";
+          pctEl.textContent   = evt.pct != null ? `${evt.pct}%` : "";
+          if (evt.pct != null) bar.style.width = evt.pct + "%";
+          logEl.innerHTML += `<div>${evt.msg || ""}</div>`;
+          logEl.scrollTop  = logEl.scrollHeight;
+        }
+
+        if (evt.type === "result") {
+          es.close();
+          _orphanAuditResult = evt.result;
+          renderAuditResults(evt.result);
+          btn.disabled    = false;
+          btn.textContent = "▶ Run Audit";
+        }
+
+        if (evt.type === "error") {
+          es.close();
+          orphanAuditError(evt.msg);
+        }
+      };
+      es.onerror = () => { es.close(); orphanAuditError("Connection lost — try again."); };
+    })
+    .catch(err => orphanAuditError(String(err)));
+}
+
+function orphanAuditError(msg) {
+  document.getElementById("orphan-run-btn").disabled    = false;
+  document.getElementById("orphan-run-btn").textContent = "▶ Run Audit";
+  document.getElementById("orphan-phase-label").textContent = "❌ " + msg;
+  document.getElementById("orphan-progress-bar").style.background = "#e53e3e";
+}
+
+function renderAuditResults(result) {
+  document.getElementById("orphan-results").style.display = "block";
+
+  // Summary badges
+  const s = result.summary;
+  const badges = [
+    { label: "Mapping entries", val: s.total_mappings,  color: "#718096", bg: "#edf2f7" },
+    { label: "Work Sessions",   val: s.total_ws,        color: "#718096", bg: "#edf2f7" },
+    { label: "Auto-fixable",    val: s.auto_fixable,    color: "#276749", bg: "#c6f6d5" },
+    { label: "Review needed",   val: s.needs_review,    color: "#744210", bg: "#fefcbf" },
+    { label: "Warnings",        val: s.warnings,        color: "#2c5282", bg: "#bee3f8" },
+  ];
+  document.getElementById("orphan-summary-badges").innerHTML = badges.map(b =>
+    `<span style="background:${b.bg};color:${b.color};font-weight:700;font-size:13px;
+                  padding:4px 12px;border-radius:99px;white-space:nowrap;">
+       ${b.val} ${b.label}
+     </span>`
+  ).join("");
+  document.getElementById("orphan-generated-at").textContent =
+    `Scanned at ${new Date(result.generated_at).toLocaleString()}`;
+
+  const allEmpty = s.auto_fixable === 0 && s.needs_review === 0 && s.warnings === 0;
+  document.getElementById("orphan-healthy-card").style.display = allEmpty ? "block" : "none";
+
+  // Auto-fixable
+  const autoCard = document.getElementById("orphan-auto-card");
+  const autoList = document.getElementById("orphan-auto-list");
+  if (result.auto_fixable.length > 0) {
+    autoCard.style.display = "block";
+    autoList.innerHTML = result.auto_fixable.map(item => `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;
+                  border-bottom:1px solid #c6f6d5;font-size:13px;">
+        <input type="checkbox" class="orphan-auto-cb" data-id="${item.id}"
+               style="margin-top:3px;flex-shrink:0;" checked>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:#2d3748;white-space:nowrap;
+                      overflow:hidden;text-overflow:ellipsis;">
+            ${orphanCaseTag(item.case)} ${escHtml(item.task_name || item.ws_title || "(untitled)")}
+          </div>
+          <div style="color:#718096;font-size:11px;margin-top:2px;">
+            ${escHtml(item.project || item.db_title || "")}
+            ${item.master_url
+              ? `— <a href="${item.master_url}" target="_blank" style="color:#4299e1;">view →</a>`
+              : item.ws_url
+                ? `— <a href="${item.ws_url}" target="_blank" style="color:#4299e1;">view →</a>`
+                : ""}
+          </div>
+          <div style="color:#718096;font-size:11px;margin-top:1px;font-style:italic;">
+            ${escHtml(item.reason || "")}
+          </div>
+        </div>
+      </div>
+    `).join("");
+    // Store items for fix
+    window._orphanAutoItems = result.auto_fixable;
+  } else {
+    autoCard.style.display = "none";
+  }
+
+  // Review queue
+  const reviewCard = document.getElementById("orphan-review-card");
+  const reviewList = document.getElementById("orphan-review-list");
+  if (result.needs_review.length > 0) {
+    reviewCard.style.display = "block";
+    _orphanReviewState = {};
+    reviewList.innerHTML = result.needs_review.map(item => `
+      <div id="review-item-${item.id}"
+           style="padding:10px 0;border-bottom:1px solid #fefcbf;font-size:13px;">
+        <div style="font-weight:600;color:#2d3748;">
+          ${orphanCaseTag(item.case)} ${escHtml(item.task_name || item.ws_title || "(untitled)")}
+        </div>
+        <div style="color:#718096;font-size:11px;margin-top:2px;">
+          ${escHtml(item.project || item.db_title || "")}
+          ${item.master_url
+            ? `— <a href="${item.master_url}" target="_blank" style="color:#4299e1;">view →</a>`
+            : item.ws_url
+              ? `— <a href="${item.ws_url}" target="_blank" style="color:#4299e1;">view →</a>`
+              : ""}
+        </div>
+        <div style="color:#744210;font-size:11px;margin-top:3px;font-style:italic;">
+          ${escHtml(item.reason || "")}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn" onclick="orphanReviewAction('${item.id}','archive')"
+                  style="font-size:11px;padding:4px 12px;background:#e53e3e;color:#fff;">
+            Archive
+          </button>
+          <button class="btn btn-ghost" onclick="orphanReviewAction('${item.id}','keep')"
+                  style="font-size:11px;padding:4px 12px;">
+            Keep
+          </button>
+        </div>
+      </div>
+    `).join("");
+    window._orphanReviewItems = result.needs_review;
+  } else {
+    reviewCard.style.display = "none";
+  }
+
+  // Warnings
+  const warnCard = document.getElementById("orphan-warnings-card");
+  const warnList = document.getElementById("orphan-warnings-list");
+  if (result.warnings.length > 0) {
+    warnCard.style.display = "block";
+    warnList.innerHTML = result.warnings.map(item => `
+      <div style="padding:8px 0;border-bottom:1px solid #bee3f8;font-size:13px;">
+        <div style="font-weight:600;color:#2c5282;">
+          ${orphanCaseTag(item.case)} ${escHtml(item.master_title || item.ws_title || "(untitled)")}
+        </div>
+        <div style="color:#718096;font-size:11px;margin-top:2px;">
+          ${escHtml(item.project || "")}
+          ${item.master_url
+            ? `— <a href="${item.master_url}" target="_blank" style="color:#4299e1;">view →</a>`
+            : item.ws_url
+              ? `— <a href="${item.ws_url}" target="_blank" style="color:#4299e1;">view →</a>`
+              : ""}
+          ${item.has_hours ? "· has logged hours" : ""}
+          ${item.ws_count  != null ? `· ${item.ws_count} session(s)` : ""}
+        </div>
+        <div style="color:#2c5282;font-size:11px;margin-top:3px;font-style:italic;">
+          ${escHtml(item.reason || "")}
+        </div>
+      </div>
+    `).join("");
+  } else {
+    warnCard.style.display = "none";
+  }
+
+  orphanLoadBackups();
+}
+
+function orphanCaseTag(caseNum) {
+  const labels = {
+    1: "<span style='background:#fed7d7;color:#c53030;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 1</span>",
+    2: "<span style='background:#feebc8;color:#c05621;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 2</span>",
+    3: "<span style='background:#fefcbf;color:#744210;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 3</span>",
+    4: "<span style='background:#e2e8f0;color:#4a5568;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 4</span>",
+    5: "<span style='background:#bee3f8;color:#2c5282;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 5</span>",
+    6: "<span style='background:#e9d8fd;color:#553c9a;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 6</span>",
+    7: "<span style='background:#fed7d7;color:#c53030;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;'>Case 7</span>",
+  };
+  return labels[caseNum] || "";
+}
+
+function orphanSelectAll(checked) {
+  document.querySelectorAll(".orphan-auto-cb").forEach(cb => cb.checked = checked);
+}
+
+function orphanFixSelected() {
+  const checked = Array.from(document.querySelectorAll(".orphan-auto-cb:checked"))
+                       .map(cb => cb.dataset.id);
+  if (!checked.length) { alert("No items selected."); return; }
+
+  const items = (window._orphanAutoItems || []).filter(i => checked.includes(i.id));
+  if (!confirm(`Archive ${items.length} item(s) and clean mapping file?\nA backup will be written first.`)) return;
+
+  const btn = document.getElementById("orphan-run-btn");
+  btn.disabled = true;
+
+  fetch("/api/orphan-fix", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ items }),
+  })
+    .then(r => r.json())
+    .then(result => {
+      btn.disabled = false;
+      if (result.error) { alert("Fix error: " + result.error); return; }
+      const fname = result.backup_file ? result.backup_file.split("/").pop() : "unknown";
+      alert(
+        `Done!\n` +
+        `Archived: ${result.archived}\n` +
+        `Mapping entries cleaned: ${result.mapping_cleaned}\n` +
+        `Backup: ${fname}` +
+        (result.errors.length ? `\n\nErrors:\n${result.errors.join("\n")}` : "")
+      );
+      // Remove fixed items from list
+      checked.forEach(id => {
+        document.querySelectorAll(`.orphan-auto-cb[data-id="${id}"]`)
+                .forEach(cb => cb.closest("div[style]").remove());
+      });
+      orphanLoadBackups();
+    })
+    .catch(err => { btn.disabled = false; alert("Error: " + err); });
+}
+
+function orphanReviewAction(itemId, action) {
+  const items = (window._orphanReviewItems || []).filter(i => i.id === itemId);
+  if (!items.length) return;
+
+  if (action === "keep") {
+    document.getElementById(`review-item-${itemId}`).style.opacity = "0.4";
+    document.getElementById(`review-item-${itemId}`)
+            .querySelector("div[style*='display:flex']").innerHTML =
+      "<span style='font-size:11px;color:#276749;'>✓ Kept</span>";
+    return;
+  }
+
+  // archive
+  if (!confirm(`Archive this item? A backup will be written first.`)) return;
+
+  fetch("/api/orphan-fix", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({
+      items: items.map(i => ({ ...i, action: i.has_hours ? "archive_ws" : "archive_master_and_ws" }))
+    }),
+  })
+    .then(r => r.json())
+    .then(result => {
+      if (result.error) { alert("Error: " + result.error); return; }
+      const el = document.getElementById(`review-item-${itemId}`);
+      if (el) {
+        el.style.opacity = "0.4";
+        el.querySelector("div[style*='display:flex']").innerHTML =
+          "<span style='font-size:11px;color:#e53e3e;'>✓ Archived</span>";
+      }
+      orphanLoadBackups();
+    })
+    .catch(err => alert("Error: " + err));
+}
+
+function orphanToggleRestore() {
+  const panel   = document.getElementById("orphan-restore-panel");
+  const chevron = document.getElementById("orphan-restore-chevron");
+  const open    = panel.style.display !== "none";
+  panel.style.display   = open ? "none" : "block";
+  chevron.textContent   = open ? "▼" : "▲";
+  if (!open) orphanLoadBackups();
+}
+
+function orphanLoadBackups() {
+  fetch("/api/orphan-backups")
+    .then(r => r.json())
+    .then(({ backups }) => {
+      const el = document.getElementById("orphan-backup-list");
+      if (!el) return;
+      if (!backups || backups.length === 0) {
+        el.innerHTML = "<div style='color:#a0aec0;font-style:italic;'>No backup files found.</div>";
+        return;
+      }
+      el.innerHTML = backups.map(b => `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:5px 0;border-bottom:1px solid #e2e8f0;">
+          <span style="color:#4a5568;">${escHtml(b.filename)}
+            <span style="color:#a0aec0;">(${b.size_kb} KB · ${escHtml(b.created_at)})</span>
+          </span>
+          <button class="btn btn-ghost"
+                  onclick="orphanRestore(${JSON.stringify(b.path)})"
+                  style="font-size:11px;padding:3px 10px;">
+            Restore
+          </button>
+        </div>
+      `).join("");
+    })
+    .catch(() => {});
+}
+
+function orphanRestore(backupPath) {
+  if (!confirm(`Restore all pages from:\n${backupPath}\n\nThis will un-archive the pages. Proceed?`)) return;
+  fetch("/api/orphan-restore", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ backup_file: backupPath }),
+  })
+    .then(r => r.json())
+    .then(result => {
+      if (result.error) { alert("Error: " + result.error); return; }
+      alert(
+        `Restore complete!\n` +
+        `Pages restored: ${result.restored}` +
+        (result.errors.length ? `\n\nErrors:\n${result.errors.join("\n")}` : "")
+      );
+    })
+    .catch(err => alert("Error: " + err));
+}
+
+function escHtml(str) {
+  return String(str || "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
 }
 
 // ── Students tab ──────────────────────────────────────────────────────────────

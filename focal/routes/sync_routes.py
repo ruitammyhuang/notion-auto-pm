@@ -22,7 +22,12 @@ from ..config import (
     save_sessions_mappings,
 )
 from ..notion_client import NotionClient
-from ..sync_engine import sync_one_database, regenerate_focus_cache
+from ..sync_engine import (
+    sync_one_database,
+    regenerate_focus_cache,
+    sync_due_dates_from_completed_sessions,
+    create_continuations_for_session_done,
+)
 from ..log_writer import write_sync_log
 
 bp = Blueprint("sync", __name__)
@@ -102,6 +107,28 @@ def _run_full_sync(token: str, sources: list, job_id: str | None = None) -> dict
                   "skipped": 0, "deleted": 0, "errors": 1, "fatal": str(e)})
 
     save_sessions_mappings(mappings)
+
+    # Reverse-sync: write Session End back to WBS due date for Completed sessions
+    emit({"type": "phase", "message": "Updating due dates from completed sessions…"})
+    try:
+        dd_result = sync_due_dates_from_completed_sessions(client, sources)
+        if dd_result["updated"]:
+            emit({"type": "due_dates_synced", "updated": dd_result["updated"]})
+        for e in dd_result["errors"]:
+            total["errors"].append(f"[due-date-sync] {e}")
+    except Exception as e:
+        total["errors"].append(f"[due-date-sync] {e}")
+
+    # Reverse-sync: Session Done set directly in Notion -> create continuation WS
+    emit({"type": "phase", "message": "Creating continuation sessions for Session Done…"})
+    try:
+        cont_result = create_continuations_for_session_done(client)
+        if cont_result["created"]:
+            emit({"type": "continuations_created", "created": cont_result["created"]})
+        for e in cont_result["errors"]:
+            total["errors"].append(f"[session-done-continuation] {e}")
+    except Exception as e:
+        total["errors"].append(f"[session-done-continuation] {e}")
 
     # Rebuild focus cache from updated mappings
     try:

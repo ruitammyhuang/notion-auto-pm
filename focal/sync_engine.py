@@ -18,16 +18,19 @@ Task metadata (name, planned_end, priority, work_type) is cached in
 sessions_mappings.json so the focus cache doesn't need extra API calls.
 
 Public surface:
-  sync_one_database()      — sync one WBS DB (three-layer)
-  regenerate_focus_cache() — rebuild focus-task-list-cache.json
-  has_logged_hours()       — used by stale-task cleanup
-  _field_fingerprint()     — exported for use in tasks.py
+  sync_one_database()                     — sync one WBS DB (three-layer)
+  regenerate_focus_cache()                — rebuild focus-task-list-cache.json
+  has_logged_hours()                      — used by stale-task cleanup
+  sync_due_dates_from_completed_sessions() — Completed sessions -> WBS due date
+  create_continuations_for_session_done() — Session Done set in Notion -> new WS
+  _field_fingerprint()                    — exported for use in tasks.py
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from datetime import datetime, timedelta
 
@@ -45,7 +48,7 @@ from .config import (
     load_sessions_mappings,
     save_sessions_mappings,
 )
-from .notion_client import NotionClient, extract, p_title, p_select
+from .notion_client import NotionClient, extract, p_title, p_select, p_date
 
 
 # ── Internal retry helper ──────────────────────────────────────────────────────
@@ -208,6 +211,205 @@ def _get_project_name(client: NotionClient, project_id: str) -> str:
     except Exception:
         pass
     return ""
+
+
+# ── Reverse sync: Completed sessions → WBS due date ──────────────────────────
+def sync_due_dates_from_completed_sessions(
+    client: NotionClient,
+    sources: list,
+) -> dict:
+    """
+    Reverse-sync pass: for each Work Session with Status == 'Completed' and a
+    Session End date, write that Session End date back to the WBS task's due
+    date field.
+
+    Only Status == 'Completed' triggers an update.  'Session Done' and every
+    other status are explicitly ignored.
+
+    Args:
+        client:  authenticated NotionClient
+        sources: list of source dicts [{db_id, field_map, ...}] — the same
+                 list passed to _run_full_sync().
+
+    Returns: {updated: N, skipped: N, errors: [...]}
+    """
+    # Build source_db_id → planned_end_field_name lookup (handle dashes either way)
+    planned_end_field_for: dict[str, str] = {}
+    for src in sources:
+        db_id = src.get("db_id", "")
+        field = src.get("field_map", {}).get("planned_end", "")
+        if db_id and field:
+            planned_end_field_for[db_id]                  = field
+            planned_end_field_for[db_id.replace("-", "")] = field
+
+    sessions_mappings = load_sessions_mappings()
+
+    # Build reverse lookup: ws_id → wbs_page_id
+    ws_id_to_wbs: dict[str, str] = {}
+    for wbs_id, info in sessions_mappings.items():
+        if isinstance(info, dict) and info.get("ws_id"):
+            ws_id_to_wbs[info["ws_id"]] = wbs_id
+
+    if not ws_id_to_wbs:
+        return {"updated": 0, "skipped": 0, "errors": []}
+
+    # Fetch all Work Sessions in one query
+    try:
+        all_ws = client.query_db(WORK_SESSIONS_DB_ID)
+    except Exception as e:
+        return {"updated": 0, "skipped": 0, "errors": [f"Work Sessions query failed: {e}"]}
+
+    updated = skipped = 0
+    errors: list[str] = []
+    changed_mappings = False
+
+    for ws in all_ws:
+        ws_id = ws["id"]
+        if ws_id not in ws_id_to_wbs:
+            skipped += 1
+            continue
+
+        props  = ws.get("properties", {})
+        status = extract(props.get("Status", {})) or ""
+
+        # Only act on fully Completed sessions
+        if status != "Completed":
+            skipped += 1
+            continue
+
+        # Extract Session End date (date-only, strip time component)
+        end_prop   = props.get("Session End", {})
+        session_end = ""
+        if end_prop.get("type") == "date" and end_prop.get("date"):
+            raw = end_prop["date"].get("start", "")
+            session_end = raw[:10] if raw else ""
+
+        if not session_end:
+            skipped += 1
+            continue
+
+        wbs_id = ws_id_to_wbs[ws_id]
+        info   = sessions_mappings[wbs_id]
+        source_db_id = info.get("source_db_id", "")
+
+        planned_end_field = (
+            planned_end_field_for.get(source_db_id)
+            or planned_end_field_for.get(source_db_id.replace("-", ""), "")
+        )
+        if not planned_end_field:
+            skipped += 1
+            continue
+
+        # Skip if already up to date
+        if info.get("planned_end", "") == session_end:
+            skipped += 1
+            continue
+
+        try:
+            client.patch_page(
+                wbs_id,
+                {"properties": {planned_end_field: p_date({"start": session_end})}},
+            ).raise_for_status()
+            info["planned_end"] = session_end
+            changed_mappings     = True
+            updated += 1
+        except Exception as e:
+            errors.append(
+                f"WBS {wbs_id[:8]} ({info.get('name', '?')}): {e}"
+            )
+
+    if changed_mappings:
+        save_sessions_mappings(sessions_mappings)
+
+    return {"updated": updated, "skipped": skipped, "errors": errors}
+
+
+# ── Reverse sync: Session Done (set in Notion) → continuation Work Session ───
+def create_continuations_for_session_done(client: NotionClient) -> dict:
+    """
+    Catches Work Sessions whose Status was changed to 'Session Done' directly
+    in Notion. The /api/log-session route already creates a continuation
+    inline when the Python UI itself sets that status — but Notion has no
+    way to call back into the Flask app, so an edit made straight in Notion
+    never reached that code. This pass closes the gap by running the same
+    check during every full sync.
+
+    Sessions are grouped into chains (same Task relation, or — for
+    standalone sessions with no Task — same Project + base name before the
+    "-N" suffix). Only the LAST session in a chain is inspected; a
+    continuation is created only if that tail's Status == 'Session Done'.
+
+    Idempotent by construction: once a continuation is created its Status is
+    'In Progress', so the new tail no longer matches and a re-run is a no-op
+    until that new tail is itself marked done.
+
+    Returns: {created: N, skipped: N, errors: [...]}
+    """
+    try:
+        all_ws = client.query_db(WORK_SESSIONS_DB_ID)
+    except Exception as e:
+        return {"created": 0, "skipped": 0, "errors": [f"Work Sessions query failed: {e}"]}
+
+    chains: dict[tuple, list[dict]] = {}
+    for ws in all_ws:
+        if ws.get("archived") or ws.get("in_trash"):
+            continue
+        props = ws.get("properties", {})
+        name  = extract(props.get("Session Name", {})) or ""
+        if not name:
+            continue
+
+        status    = extract(props.get("Status", {})) or ""
+        task_rels = props.get("Task", {}).get("relation", [])
+        proj_rels = props.get("Project", {}).get("relation", [])
+        task_id   = task_rels[0]["id"] if task_rels else None
+        proj_id   = proj_rels[0]["id"] if proj_rels else None
+
+        m    = re.search(r'-(\d+)$', name)
+        base = name[:m.start()] if m else name
+        n    = int(m.group(1)) if m else 1
+
+        key = ("task", task_id) if task_id else ("proj", proj_id, base)
+        chains.setdefault(key, []).append({
+            "id": ws["id"], "n": n, "status": status, "name": name,
+            "base": base, "props": props, "task_id": task_id, "proj_id": proj_id,
+        })
+
+    created = skipped = 0
+    errors: list[str] = []
+
+    for entries in chains.values():
+        entries.sort(key=lambda e: e["n"])
+        tail = entries[-1]
+        if tail["status"] != "Session Done":
+            skipped += 1
+            continue
+
+        try:
+            props     = tail["props"]
+            proj_rels = props.get("Project", {}).get("relation", [])
+            task_id   = tail["task_id"]
+            cont_name = f"{tail['base']}-{tail['n'] + 1}"
+
+            cont_props: dict = {
+                "Session Name": p_title(cont_name),
+                "Project":      {"relation": proj_rels} if proj_rels else
+                                 {"relation": [{"id": tail["proj_id"]}]} if tail["proj_id"]
+                                 else {"relation": []},
+                "Status":       {"select": {"name": "In Progress"}},
+            }
+            if task_id:
+                cont_props["Task"] = {"relation": [{"id": task_id}]}
+            wt = extract(props.get("Work Type", {}))
+            if wt:
+                cont_props["Work Type"] = {"select": {"name": wt}}
+
+            client.create_page({"database_id": WORK_SESSIONS_DB_ID}, cont_props)
+            created += 1
+        except Exception as e:
+            errors.append(f"WS {tail['id'][:8]} ({tail['name']}): {e}")
+
+    return {"created": created, "skipped": skipped, "errors": errors}
 
 
 # ── Core sync ─────────────────────────────────────────────────────────────────

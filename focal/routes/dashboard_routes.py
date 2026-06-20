@@ -251,6 +251,7 @@ def api_workload():
             "status":    status,
             "project":   proj_name,
             "url":       f"https://app.notion.com/p/{pid_clean}",
+            "ws_id":     s["id"],   # raw page ID for inline work-type editing
         })
 
         if duration:
@@ -259,12 +260,14 @@ def api_workload():
             by_work_type[work_type] = by_work_type.get(work_type, 0) + duration
 
     result_sessions.sort(key=lambda s: s["start"], reverse=True)
+    unclassified = sum(1 for s in result_sessions if s["work_type"] == "Unclassified")
     return jsonify({
-        "start_date":    start_s,
-        "end_date":      end_s,
-        "total_hours":   round(total_hours, 2),
-        "session_count": len(result_sessions),
-        "project_count": len(by_project),
+        "start_date":         start_s,
+        "end_date":           end_s,
+        "total_hours":        round(total_hours, 2),
+        "session_count":      len(result_sessions),
+        "project_count":      len(by_project),
+        "unclassified_count": unclassified,
         "by_project":  [{"name": k, "hours": round(v, 2)}
                          for k, v in sorted(by_project.items(), key=lambda x: x[1], reverse=True)],
         "by_work_type": [{"name": k, "hours": round(v, 2)}

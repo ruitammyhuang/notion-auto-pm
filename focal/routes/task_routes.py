@@ -19,6 +19,7 @@ from flask import Blueprint, jsonify, request
 
 from ..config import (
     WORK_SESSIONS_DB_ID,
+    VALID_WORK_TYPES,
     load_config,
     load_sessions_mappings,
     save_sessions_mappings,
@@ -27,7 +28,7 @@ from ..config import (
 )
 from ..notion_client import NotionClient, extract, p_title, p_text, p_date
 from ..sync_engine import regenerate_focus_cache
-from ..tasks import quick_add_task
+from ..tasks import quick_add_task, delete_task_cascade
 
 bp = Blueprint("tasks", __name__)
 
@@ -250,8 +251,8 @@ def api_project_tasks():
                 continue
             props  = page.get("properties", {})
             status = extract(props.get("Status", {})) or ""
-            # Hide sessions that are fully done or already marked as a closed block
-            if status in ("Completed", "Session Done"):
+            # Hide only fully completed sessions; Session Done should still appear
+            if status == "Completed":
                 continue
 
             name = extract(props.get("Session Name", {})) or ""
@@ -552,3 +553,138 @@ def api_add_project_page_link():
         return jsonify({"status": "added", "hub_page_id": hub_page_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+
+# ── Cascade-delete an accidentally created task ────────────────────────────────
+
+@bp.route("/api/delete-task", methods=["POST"])
+def api_delete_task():
+    """
+    Archive a Work Session and every record that was created alongside it:
+    the Master WBS Tasks relay entry and the Project WBS source row.
+
+    Use this to undo an accidental Quick Add.  Each archive step is
+    attempted independently so a partial failure is still reported clearly.
+
+    Body:  { ws_id: "<Work Session page ID or URL>" }
+    Returns: { ok, task_name, archived, skipped, warnings }
+    """
+    body  = request.json or {}
+    ws_id = body.get("ws_id", "").strip()
+    if not ws_id:
+        return jsonify({"error": "ws_id required"}), 400
+
+    # Accept full Notion URLs as well as raw page IDs
+    ws_id = _extract_page_id(ws_id) or ws_id
+
+    cfg   = load_config()
+    token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No Notion token — save one in the Setup tab first"}), 400
+
+    try:
+        client = NotionClient(token)
+        result = delete_task_cascade(client, ws_id)
+        return jsonify({"ok": True, **result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/api/work-types", methods=["GET"])
+def api_work_types():
+    """Return the list of valid Work Type values."""
+    return jsonify({"work_types": VALID_WORK_TYPES})
+
+
+@bp.route("/api/set-work-type", methods=["POST"])
+def api_set_work_type():
+    """
+    Set Work Type on a Work Session and propagate it back to the source WBS row.
+
+    Body: { ws_id: "<page-id>", work_type: "🔵 Deep Work" }
+
+    Steps:
+      1. Write "Work Type" select on the Work Session page directly
+         (dashboard reflects immediately on next load).
+      2. Look up the WBS source page via inverted sessions_mappings (ws_id → wbs_key).
+      3. Write work_type to the WBS source row using the field_map's work_type_field
+         (survives future syncs — WBS is the canonical source).
+
+    Returns: { ok, wbs_updated, warning? }
+    """
+    body      = request.json or {}
+    ws_id     = body.get("ws_id", "").strip()
+    work_type = body.get("work_type", "").strip()
+
+    if not ws_id:
+        return jsonify({"error": "ws_id required"}), 400
+    if not work_type:
+        return jsonify({"error": "work_type required"}), 400
+    if work_type not in VALID_WORK_TYPES:
+        return jsonify({"error": f"Invalid work_type. Valid values: {VALID_WORK_TYPES}"}), 400
+
+    cfg   = load_config()
+    token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No Notion token — save one in the Setup tab first"}), 400
+
+    client = NotionClient(token)
+
+    # ── Step 1: Update Work Session directly ──────────────────────────────────
+    try:
+        r = client.patch_page(ws_id, {
+            "properties": {"Work Type": {"select": {"name": work_type}}}
+        })
+        if not r.ok:
+            return jsonify({"error": f"Failed to update Work Session: {r.status_code} {r.text[:200]}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Failed to update Work Session: {e}"}), 500
+
+    # ── Step 2: Find WBS source row via inverted sessions_mappings ────────────
+    mappings     = load_sessions_mappings()
+    wbs_page_id  = None
+    source_db_id = None
+
+    for wbs_id, info in mappings.items():
+        if isinstance(info, dict) and info.get("ws_id") == ws_id:
+            wbs_page_id  = wbs_id
+            source_db_id = info.get("source_db_id", "")
+            break
+
+    if not wbs_page_id:
+        return jsonify({
+            "ok":          True,
+            "wbs_updated": False,
+            "warning":     "Work Session updated. WBS source row not found in mapping — run a Sync to link it.",
+        })
+
+    # ── Step 3: Write to WBS source row ───────────────────────────────────────
+    sources         = cfg.get("sources", {})
+    work_type_field = sources.get(source_db_id, {}).get("field_map", {}).get("work_type", "")
+
+    if not work_type_field:
+        return jsonify({
+            "ok":          True,
+            "wbs_updated": False,
+            "warning":     "Work Session updated. No work_type field mapped for this project's WBS — set it in Sources.",
+        })
+
+    try:
+        wr = client.patch_page(wbs_page_id, {
+            "properties": {work_type_field: {"select": {"name": work_type}}}
+        })
+        if not wr.ok:
+            return jsonify({
+                "ok":          True,
+                "wbs_updated": False,
+                "warning":     f"Work Session updated but WBS update failed: {wr.status_code}",
+            })
+    except Exception as e:
+        return jsonify({
+            "ok":          True,
+            "wbs_updated": False,
+            "warning":     f"Work Session updated but WBS update failed: {e}",
+        })
+
+    return jsonify({"ok": True, "wbs_updated": True})

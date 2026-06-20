@@ -55,9 +55,26 @@ PRIORITY_MAP = {
     "low": "Low", "minor": "Low", "nice to have": "Low",
 }
 VALID_PRIORITIES = ["Urgent", "High", "Normal", "Low"]
-VALID_WORK_TYPES = [
-    "🔵 Deep Work", "🟡 Meeting & Call", "🟠 Admin & Ops", "🟢 Communication"
+
+# ── Work Type options ──────────────────────────────────────────────────────────
+# Single source of truth for all Work Type select columns across Notion.
+# To add or rename a category:
+#   1. Edit this list (name + color).
+#   2. Run:  python3 sync_work_type_options.py
+#      That script reads this list and pushes the options to every WBS database
+#      and Work Sessions in Notion. No other files need editing.
+#
+# Notion color palette: blue, brown, default, gray, green, orange, pink, purple, red, yellow
+WORK_TYPE_OPTIONS = [
+    {"name": "✍️ Writing",              "color": "purple"},
+    {"name": "🔍 Analysis",             "color": "blue"},
+    {"name": "📐 Design & Build",       "color": "green"},
+    {"name": "✅ Review & Assessment",  "color": "yellow"},
+    {"name": "🤝 Meeting",              "color": "orange"},
+    {"name": "⚙️ Admin",                "color": "gray"},
+    {"name": "📣 Communication",        "color": "pink"},
 ]
+VALID_WORK_TYPES = [o["name"] for o in WORK_TYPE_OPTIONS]
 
 
 # ── Config persistence ─────────────────────────────────────────────────────────

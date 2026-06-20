@@ -168,3 +168,87 @@ def quick_add_task(
         "master_url": master_page.get("url", ""),
         "ws_url":     ws_page.get("url", ""),
     }
+
+
+def delete_task_cascade(client: NotionClient, ws_id: str) -> dict:
+    """
+    Archive all three records that were created together for one task:
+      1. Work Session          (ws_id)
+      2. Master WBS Tasks entry (master_id, looked up from sessions_mappings)
+      3. Project WBS source row (wbs_page_id, key in sessions_mappings)
+
+    Each archive step is attempted independently — a failure on one does
+    not prevent the others from running.  The sessions_mappings entry is
+    marked deleted and the focus cache is regenerated.
+
+    Args:
+        client: authenticated NotionClient
+        ws_id:  Work Session page ID (with or without dashes)
+
+    Returns:
+        {
+            "archived":  list of labels describing what was successfully archived,
+            "skipped":   list of labels skipped (not found or already archived),
+            "warnings":  list of error strings for steps that failed,
+        }
+    """
+    # Normalise ws_id to dashed form
+    hex_only = ws_id.replace("-", "")
+    if len(hex_only) >= 32:
+        h = hex_only[-32:]
+        ws_id = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+
+    sessions_mappings = load_sessions_mappings()
+
+    # Find the mapping entry for this Work Session
+    wbs_page_id  = None
+    master_id    = None
+    task_name    = None
+    for wbs_id, info in sessions_mappings.items():
+        if isinstance(info, dict) and info.get("ws_id") == ws_id:
+            wbs_page_id = wbs_id
+            master_id   = info.get("master_id", "")
+            task_name   = info.get("name", "")
+            break
+
+    archived: list[str] = []
+    skipped:  list[str] = []
+    warnings: list[str] = []
+
+    def _archive(page_id: str, label: str) -> None:
+        if not page_id:
+            skipped.append(f"{label} (no ID)")
+            return
+        try:
+            r = client.patch_page(page_id, {"archived": True})
+            if r.status_code == 404:
+                skipped.append(f"{label} (already deleted or not found)")
+            else:
+                r.raise_for_status()
+                archived.append(label)
+        except Exception as e:
+            warnings.append(f"{label}: {e}")
+
+    # Archive all three records
+    _archive(ws_id,       "Work Session")
+    _archive(master_id,   "Master WBS Tasks entry")
+    _archive(wbs_page_id, "Project WBS row")
+
+    # Remove from sessions_mappings
+    if wbs_page_id and wbs_page_id in sessions_mappings:
+        sessions_mappings[wbs_page_id]["deleted"] = True
+        save_sessions_mappings(sessions_mappings)
+
+    # Rebuild focus cache so deleted task disappears immediately
+    try:
+        regenerate_focus_cache(client)
+    except Exception as e:
+        warnings.append(f"focus-cache rebuild: {e}")
+
+    return {
+        "task_name": task_name or ws_id[:8],
+        "archived":  archived,
+        "skipped":   skipped,
+        "warnings":  warnings,
+    }
+
