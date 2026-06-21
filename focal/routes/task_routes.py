@@ -220,7 +220,10 @@ def api_quick_add():
 @bp.route("/api/project-tasks", methods=["POST"])
 def api_project_tasks():
     """
-    Return non-completed Work Sessions for a project.
+    Return active Work Sessions for a project (excludes Completed and
+    Session Done — once a session is wrapped up, it shouldn't appear as a
+    loggable existing task; the continuation session created by the
+    Session-Done reverse-sync pass is what should be picked instead).
 
     In two-layer model, Work Sessions ARE the task tracker.
     Body: {token, project_id}
@@ -251,8 +254,10 @@ def api_project_tasks():
                 continue
             props  = page.get("properties", {})
             status = extract(props.get("Status", {})) or ""
-            # Hide only fully completed sessions; Session Done should still appear
-            if status == "Completed":
+            # Hide fully completed sessions and ones already marked Session
+            # Done — those are closed out; only their continuation (created
+            # by the reverse-sync pass) should remain selectable.
+            if status in ("Completed", "Session Done"):
                 continue
 
             name = extract(props.get("Session Name", {})) or ""
