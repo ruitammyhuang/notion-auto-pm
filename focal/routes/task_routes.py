@@ -28,38 +28,9 @@ from ..config import (
 )
 from ..notion_client import NotionClient, extract, p_title, p_text, p_date
 from ..sync_engine import regenerate_focus_cache
-from ..tasks import quick_add_task, delete_task_cascade
+from ..tasks import quick_add_task, delete_task_cascade, _next_continuation_name
 
 bp = Blueprint("tasks", __name__)
-
-
-# ── Continuation session helper ────────────────────────────────────────────────
-
-def _next_continuation_name(client, base_name: str, task_id: str) -> str:
-    """
-    Returns the next continuation session name (base-N format).
-    Strips any existing '-N' suffix, queries all Work Sessions for this Task,
-    finds the highest N already used, and returns base-(N+1).
-    e.g. if 'Draft paper' and 'Draft paper-2' exist → returns 'Draft paper-3'
-    """
-    base = re.sub(r'-\d+$', '', base_name)
-    filter_body = {"property": "Task", "relation": {"contains": task_id}}
-    try:
-        pages = client.query_db(WORK_SESSIONS_DB_ID, filter_body)
-    except Exception:
-        pages = []
-
-    max_n = 1
-    for page in pages:
-        name = extract(page.get("properties", {}).get("Session Name", {})) or ""
-        if name == base:
-            max_n = max(max_n, 1)
-        elif name.startswith(base + "-"):
-            suffix = name[len(base) + 1:]
-            if suffix.isdigit():
-                max_n = max(max_n, int(suffix))
-
-    return f"{base}-{max_n + 1}"
 
 
 # ── WBS field option helpers ───────────────────────────────────────────────────

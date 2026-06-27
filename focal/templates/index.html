@@ -791,7 +791,7 @@
     </div>
 
     <div class="row" style="margin-top:4px;">
-      <button class="btn btn-primary" id="qs-btn" onclick="runQuickAdd()">⚡ Add Task &amp; Start Session</button>
+      <button class="btn btn-primary" id="qs-btn" onclick="runQuickAdd()">⚡ Add Task &amp; Work Session</button>
     </div>
   </div>
 
@@ -1317,6 +1317,11 @@ async function init() {
   // Pre-load student roster into state (used by Quick Start student dropdown)
   const sr = await api("GET", "/api/students");
   if (sr.students) state.students = sr.students;
+  // Pre-load projects so Sync tab shows project names instead of UUIDs on first load
+  if (state.token) {
+    const pr = await api("POST", "/api/projects", {token: state.token});
+    if (!pr.error) state.projects = pr.projects;
+  }
   refreshSyncTab();
 }
 
@@ -2849,7 +2854,7 @@ async function runQuickAdd() {
   btn.disabled = false;
   btn.innerHTML = isLogMode
     ? "⏱️ Log Session"
-    : "⚡ Add Task &amp; Start Session";
+    : "⚡ Add Task &amp; Work Session";
   document.getElementById("qs-result").style.display = "block";
 
   if (res.error) {
@@ -2892,6 +2897,19 @@ async function runQuickAdd() {
       document.getElementById("qs-link-wbs").href             = savedWbsUrl;
       document.getElementById("qs-link-master").href          = savedMasterUrl;
       document.getElementById("qs-link-ws").href              = savedWsUrl;
+
+      // Show continuation link if Session Done was selected at creation time
+      const contBanner = document.getElementById("qs-continuation-banner");
+      if (res.continuation_ws_url && contBanner) {
+        contBanner.style.display = "block";
+        const contLink = document.getElementById("qs-continuation-link");
+        if (contLink) {
+          contLink.href        = res.continuation_ws_url;
+          contLink.textContent = res.continuation_ws_name || "next session";
+        }
+      } else if (contBanner) {
+        contBanner.style.display = "none";
+      }
 
       // Sync student profile cache if profile was updated
       if (updateProfile && studentName && currentPhase) {

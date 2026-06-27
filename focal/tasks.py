@@ -9,6 +9,7 @@ Sessions mapping: wbs_page_id → {ws_id, fp, name, planned_end, ...}.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
 from .config import (
@@ -22,6 +23,38 @@ from .config import (
 )
 from .notion_client import NotionClient, p_title, p_text, p_select, p_date
 from .sync_engine import regenerate_focus_cache, _field_fingerprint
+
+
+def _next_continuation_name(client: NotionClient, base_name: str, task_id: str) -> str:
+    """
+    Returns the next continuation session name (base-N format).
+    Strips any existing '-N' suffix, queries all Work Sessions for this Task,
+    finds the highest N already used, and returns base-(N+1).
+    e.g. if 'Draft paper' and 'Draft paper-2' exist -> returns 'Draft paper-3'
+    """
+    base = re.sub(r'-\d+$', '', base_name)
+    filter_body = {"property": "Task", "relation": {"contains": task_id}}
+    try:
+        pages = client.query_db(WORK_SESSIONS_DB_ID, filter_body)
+    except Exception:
+        pages = []
+
+    max_n = 1
+    for page in pages:
+        name = ""
+        props = page.get("properties", {})
+        sess_name_prop = props.get("Session Name", {})
+        titles = sess_name_prop.get("title", [])
+        if titles:
+            name = titles[0].get("plain_text", "")
+        if name == base:
+            max_n = max(max_n, 1)
+        elif name.startswith(base + "-"):
+            suffix = name[len(base) + 1:]
+            if suffix.isdigit():
+                max_n = max(max_n, int(suffix))
+
+    return f"{base}-{max_n + 1}"
 
 
 def quick_add_task(
@@ -144,6 +177,23 @@ def quick_add_task(
     ws_page = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, ws_props)
     ws_id   = ws_page["id"]
 
+    # ── 3b. Session Done: auto-create a continuation Work Session ─────────────
+    continuation_ws_url  = None
+    continuation_ws_name = None
+    if session_status == "Session Done":
+        cont_name = _next_continuation_name(client, task_name, master_id)
+        cont_props: dict = {
+            "Session Name": p_title(cont_name),
+            "Task":         {"relation": [{"id": master_id}]},
+            "Project":      {"relation": [{"id": project_id}]},
+            "Status":       {"select": {"name": "In Progress"}},
+        }
+        if work_type and work_type in VALID_WORK_TYPES:
+            cont_props["Work Type"] = p_select(work_type)
+        cont_page            = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, cont_props)
+        continuation_ws_url  = f"https://app.notion.com/p/{cont_page['id'].replace('-', '')}"
+        continuation_ws_name = cont_name
+
     # ── 4. Update sessions mapping ────────────────────────────────────────────
     fp = _field_fingerprint(task_name, norm_priority if norm_priority in VALID_PRIORITIES else None,
                             work_type or None, due_date or None, None, None)
@@ -163,11 +213,15 @@ def quick_add_task(
 
     regenerate_focus_cache(client)
 
-    return {
+    result = {
         "wbs_url":    wbs_page.get("url", ""),
         "master_url": master_page.get("url", ""),
         "ws_url":     ws_page.get("url", ""),
     }
+    if continuation_ws_url:
+        result["continuation_ws_url"]  = continuation_ws_url
+        result["continuation_ws_name"] = continuation_ws_name
+    return result
 
 
 def delete_task_cascade(client: NotionClient, ws_id: str) -> dict:
