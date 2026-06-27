@@ -2203,7 +2203,9 @@ async function checkExistingTasks() {
       t.id, t.name, t.url,
       t.priority || "Normal",
       t.work_type || "",
-      t.planned_end || ""
+      t.planned_end || "",
+      t.session_start || "",
+      t.session_end || ""
     ));
     card.appendChild(loadBtn);
 
@@ -2332,7 +2334,7 @@ async function runBatchDelete() {
 }
 
 
-function selectExistingTask(taskId, taskName, taskUrl, priority, workType, plannedEnd) {
+function selectExistingTask(taskId, taskName, taskUrl, priority, workType, plannedEnd, sessionStart, sessionEnd) {
   window._qsSelectedTask = {id: taskId, name: taskName, url: taskUrl};
 
   // Show selected-task banner
@@ -2371,9 +2373,9 @@ function selectExistingTask(taskId, taskName, taskUrl, priority, workType, plann
   const btn = document.getElementById("qs-btn");
   btn.innerHTML = "⏱️ Log Session";
 
-  // Clear session time fields so user fills them fresh
-  document.getElementById("qs-start").value          = "";
-  document.getElementById("qs-end").value            = "";
+  // Restore session times if already recorded; convert from Notion ISO to datetime-local format
+  document.getElementById("qs-start").value          = isoToDatetimeLocal(sessionStart);
+  document.getElementById("qs-end").value            = isoToDatetimeLocal(sessionEnd);
   document.getElementById("qs-session-status").value = "";
   document.getElementById("qs-comment").value        = "";
 
@@ -2702,6 +2704,17 @@ function onQsCategoryChange() {
 function toggleWorkTypeRef() {
   const el = document.getElementById("work-type-ref");
   el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+// Convert any ISO-8601 string (UTC "Z" or offset) to datetime-local format (YYYY-MM-DDTHH:MM)
+// using local time components so the displayed time matches the user's clock.
+function isoToDatetimeLocal(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return "";
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function setQsNow() {

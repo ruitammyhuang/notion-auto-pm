@@ -239,14 +239,19 @@ def api_project_tasks():
             pid_clean = ws_id.replace("-", "")
             info      = ws_to_info.get(ws_id, {})
 
+            _ss = extract(props.get("Session Start", {}))
+            _se = extract(props.get("Session End", {}))
+
             tasks.append({
-                "id":          ws_id,
-                "url":         f"https://app.notion.com/p/{pid_clean}",
-                "name":        name,
-                "priority":    info.get("priority") or extract(props.get("Priority", {})) or "Normal",
-                "work_type":   extract(props.get("Work Type", {})) or info.get("work_type") or "",
-                "planned_end": info.get("planned_end", ""),
-                "status":      status,
+                "id":            ws_id,
+                "url":           f"https://app.notion.com/p/{pid_clean}",
+                "name":          name,
+                "priority":      info.get("priority") or extract(props.get("Priority", {})) or "Normal",
+                "work_type":     extract(props.get("Work Type", {})) or info.get("work_type") or "",
+                "planned_end":   info.get("planned_end", ""),
+                "status":        status,
+                "session_start": _ss["start"] if isinstance(_ss, dict) else "",
+                "session_end":   _se["start"] if isinstance(_se, dict) else "",
             })
 
         tasks.sort(key=lambda t: t["name"].lower())
