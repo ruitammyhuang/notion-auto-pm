@@ -93,6 +93,8 @@ def quick_add_task(
     program_field: str = "",
     project_name: str = "",
     backlink_field: str = "",
+    auto_calc_planned_start: int = 0,
+    planned_start_field: str = "",
 ) -> dict:
     """
     Create a task in three places:
@@ -108,6 +110,13 @@ def quick_add_task(
 
     if due_date and planned_end_field:
         wbs_props[planned_end_field] = p_date({"start": due_date})
+    if due_date and auto_calc_planned_start and planned_start_field:
+        try:
+            ps = (datetime.strptime(due_date[:10], "%Y-%m-%d")
+                  - timedelta(days=int(auto_calc_planned_start))).strftime("%Y-%m-%d")
+            wbs_props[planned_start_field] = p_date({"start": ps})
+        except Exception:
+            pass
     if priority and priority_field:
         norm = PRIORITY_MAP.get(priority.lower(), priority)
         if norm in VALID_PRIORITIES:

@@ -148,6 +148,14 @@ def api_quick_add():
     if not all([token, source_db_id, project_id, task_name]):
         return jsonify({"error": "token, source_db_id, project_id, and task_name required"}), 400
 
+    # Read auto_calc_planned_start and planned_start_field from source config
+    src_cfg        = load_config().get("sources", {}).get(source_db_id, {})
+    _acps_raw      = src_cfg.get("auto_calc_planned_start", 0)
+    auto_calc_ps   = (7 if _acps_raw is True
+                      else 0 if _acps_raw is False
+                      else int(_acps_raw or 0))
+    planned_start_field = src_cfg.get("field_map", {}).get("planned_start", "")
+
     try:
         client = NotionClient(token)
         result = quick_add_task(
@@ -171,6 +179,8 @@ def api_quick_add():
             program=program, program_field=program_field,
             project_name=project_name,
             backlink_field=backlink_field,
+            auto_calc_planned_start=auto_calc_ps,
+            planned_start_field=planned_start_field,
         )
         if update_profile and student_name and current_phase:
             update_student_phase(student_name, current_phase)
