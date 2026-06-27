@@ -177,7 +177,6 @@ def run_backup() -> str:
     # ── 3. Also snapshot the local mapping files ───────────────────────────────
     local_files = {
         "focal_sessions_mappings.json": os.path.join(BASE_DIR, "focal_sessions_mappings.json"),
-        "focal_mappings.json":          os.path.join(BASE_DIR, "focal_mappings.json"),
         "focal_students.json":          os.path.join(BASE_DIR, "focal_students.json"),
     }
     snapshot["local_files"] = {}

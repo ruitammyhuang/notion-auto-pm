@@ -188,7 +188,7 @@
     <div class="flow">
       <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(52,211,153,.15);color:var(--accent3)">1</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Edit tasks in Project WBS</h4><p>Add/update rows directly in Notion. Set Task name, Due Date, Priority, Notes, Phase/Category. This is the only manual step.</p></div></div>
       <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">2</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Run sync tool &rarr; Sync tab &rarr; Sync Now</h4><p>Reads all configured WBS databases via Notion API. Maps columns using <code>field_map</code> in config. Normalizes status/priority values.</p></div></div>
-      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">3</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Upsert into Master WBS Tasks</h4><p>Checks <code>focal_mappings.json</code> for existing mapping. New &rarr; CREATE + write backlink. Existing &rarr; UPDATE changed fields only. Status set ONLY on CREATE.</p></div></div>
+      <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(108,142,247,.15);color:var(--accent)">3</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Upsert into Master WBS Tasks</h4><p>Checks WBS backlink field for existing Master WBS entry. New &rarr; CREATE + write backlink. Existing &rarr; UPDATE changed fields only. Status set ONLY on CREATE.</p></div></div>
       <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(167,139,250,.15);color:var(--accent2)">4</div><div class="flow-vline"></div></div><div class="flow-content"><h4>Create Work Session (Quick Start)</h4><p>Via Quick Start tab: creates session linked to Master WBS task + Projects DB entry. Mapping persisted in <code>focal_sessions_mappings.json</code>.</p></div></div>
       <div class="flow-step"><div class="flow-line"><div class="flow-dot" style="background:rgba(245,158,11,.15);color:var(--accent4)">5</div></div><div class="flow-content"><h4>Status propagates automatically</h4><p>Mark Work Session Status = &ldquo;Completed&rdquo; in Notion &rarr; Master WBS Auto Status formula updates &rarr; Project WBS Auto Status rollup reflects completion.</p></div></div>
     </div>
@@ -200,10 +200,9 @@
       <div class="card"><div class="card-title">Value Normalization</div><p>Status and Priority strings normalized on sync: &ldquo;Todo / Not Started&rdquo; &rarr; Not Started &middot; &ldquo;Done / Finished&rdquo; &rarr; Completed &middot; &ldquo;Urgent / Critical&rdquo; &rarr; Urgent.</p></div>
     </div>
     <div class="sec-label">State Files</div>
-    <div class="grid3">
+    <div class="grid2">
       <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">focal_config.json</div><div style="font-size:11px;color:var(--muted)">Token + all source WBS DB IDs, project mappings, field maps. Edit to add/reconfigure projects.</div></div>
-      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px">focal_mappings.json</div><div style="font-size:11px;color:var(--muted)">Source task ID &rarr; Master WBS page ID. ~120 entries. Auto-generated.</div></div>
-      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent3);margin-bottom:6px">focal_sessions_mappings.json</div><div style="font-size:11px;color:var(--muted)">Master task &rarr; Work Session page ID. ~241 entries. Auto-generated.</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:700;color:var(--accent3);margin-bottom:6px">focal_sessions_mappings.json</div><div style="font-size:11px;color:var(--muted)">WBS task &rarr; Master WBS + Work Session page IDs. Auto-generated.</div></div>
     </div>
   </div>
 
