@@ -70,6 +70,16 @@
       "deprecated": false,
       "version": 1,
       "former_names": []
+    },
+    {
+      "name": "🏫 Facilitation & Instruction",
+      "color": "purple",
+      "description": "Live delivery: teaching class sessions, online synchronous sessions, workshops, seminars, and group facilitation",
+      "examples": [],
+      "created_at": "2026-06-28T19:28:17",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
     }
   ],
   "creation_log": [
@@ -114,6 +124,12 @@
       "name": "📣 Communication",
       "timestamp": "2026-06-27T00:00:00",
       "context": "Initial migration from config.py"
+    },
+    {
+      "event": "created",
+      "name": "🏫 Facilitation & Instruction",
+      "timestamp": "2026-06-28T19:28:17",
+      "context": ""
     }
   ]
 }
