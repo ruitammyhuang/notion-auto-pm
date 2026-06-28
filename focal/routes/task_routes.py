@@ -362,6 +362,15 @@ def api_log_session():
                 continuation_ws_url  = f"https://app.notion.com/p/{cont_page['id'].replace('-', '')}"
                 continuation_ws_name = cont_name
 
+                # Re-point the mapping entry to the continuation WS so Focus
+                # picks up the new active session on next cache rebuild.
+                for _k, _m in mappings.items():
+                    if isinstance(_m, dict) and _m.get("ws_id") == ws_id:
+                        _m["ws_id"]  = cont_page["id"]
+                        _m["status"] = "In Progress"
+                        break
+                save_sessions_mappings(mappings)
+
         else:
             # Create a new standalone Work Session (no existing WS selected)
             ws_props = {
