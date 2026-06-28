@@ -44,11 +44,11 @@ from .config import (
     FOCUS_CACHE_FILE,
     PRIORITY_MAP,
     VALID_PRIORITIES,
-    VALID_WORK_TYPES,
     load_sessions_mappings,
     save_sessions_mappings,
 )
 from .notion_client import NotionClient, extract, p_title, p_select, p_date
+from .work_type_manager import get_valid_names as _get_valid_work_types
 
 
 # ── Internal retry helper ──────────────────────────────────────────────────────
@@ -536,10 +536,13 @@ def sync_one_database(
         if priority not in VALID_PRIORITIES:
             priority = None
 
-        # Work type
-        work_type = get_field("work_type")
-        if work_type not in VALID_WORK_TYPES:
-            work_type = None
+        # Work type -- skip overwrite if user has locked it via recode/rollback
+        if existing and isinstance(existing, dict) and existing.get("locked_work_type"):
+            work_type = existing.get("work_type") or None
+        else:
+            work_type = get_field("work_type")
+            if work_type not in _get_valid_work_types():
+                work_type = None
 
         # Dates
         def _start(v):

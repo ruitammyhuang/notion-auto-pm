@@ -205,6 +205,14 @@ def api_workload():
         except Exception:
             pass
 
+    # Build ws_id -> wbs_page_id reverse index for lock status lookup
+    mappings   = load_sessions_mappings()
+    _ws_to_wbs = {
+        info.get("ws_id"): wbs_id
+        for wbs_id, info in mappings.items()
+        if isinstance(info, dict) and info.get("ws_id")
+    }
+
     result_sessions = []
     by_project:   dict[str, float] = {}
     by_work_type: dict[str, float] = {}
@@ -242,16 +250,28 @@ def api_workload():
         proj_name = project_names.get(proj_id, "Unknown Project")
 
         pid_clean = s["id"].replace("-", "")
+
+        # Look up lock status from sessions_mappings (ws_id -> wbs_page_id)
+        ws_id_raw    = s["id"]
+        wbs_page_id  = _ws_to_wbs.get(ws_id_raw, "")
+        wbs_info     = mappings.get(wbs_page_id, {}) if wbs_page_id else {}
+        locked       = bool(isinstance(wbs_info, dict) and wbs_info.get("locked_work_type"))
+        recode_hist  = wbs_info.get("recode_history", []) if isinstance(wbs_info, dict) else []
+        latest_audit = recode_hist[-1] if recode_hist else ""
+
         result_sessions.append({
-            "name":      name,
-            "start":     sess_start,
-            "end":       sess_end,
-            "duration":  duration,
-            "work_type": work_type,
-            "status":    status,
-            "project":   proj_name,
-            "url":       f"https://app.notion.com/p/{pid_clean}",
-            "ws_id":     s["id"],   # raw page ID for inline work-type editing
+            "name":           name,
+            "start":          sess_start,
+            "end":            sess_end,
+            "duration":       duration,
+            "work_type":      work_type,
+            "status":         status,
+            "project":        proj_name,
+            "url":            f"https://app.notion.com/p/{pid_clean}",
+            "ws_id":          ws_id_raw,
+            "wbs_page_id":    wbs_page_id,
+            "locked_work_type": locked,
+            "latest_audit_id":  latest_audit,
         })
 
         if duration:

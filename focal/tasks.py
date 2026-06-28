@@ -17,12 +17,12 @@ from .config import (
     WORK_SESSIONS_DB_ID,
     PRIORITY_MAP,
     VALID_PRIORITIES,
-    VALID_WORK_TYPES,
     load_sessions_mappings,
     save_sessions_mappings,
 )
 from .notion_client import NotionClient, p_title, p_text, p_select, p_date
 from .sync_engine import regenerate_focus_cache, _field_fingerprint
+from .work_type_manager import get_valid_names as _get_valid_work_types
 
 
 def _next_continuation_name(client: NotionClient, base_name: str, task_id: str) -> str:
@@ -121,7 +121,7 @@ def quick_add_task(
         norm = PRIORITY_MAP.get(priority.lower(), priority)
         if norm in VALID_PRIORITIES:
             wbs_props[priority_field] = {"select": {"name": norm}}
-    if work_type and work_type_field and work_type in VALID_WORK_TYPES:
+    if work_type and work_type_field and work_type in _get_valid_work_types():
         wbs_props[work_type_field] = {"select": {"name": work_type}}
     if category and category_field:
         wbs_props[category_field] = {"select": {"name": category}}
@@ -172,7 +172,7 @@ def quick_add_task(
         "Task":         {"relation": [{"id": master_id}]},
         "Project":      {"relation": [{"id": project_id}]},
     }
-    if work_type and work_type in VALID_WORK_TYPES:
+    if work_type and work_type in _get_valid_work_types():
         ws_props["Work Type"] = p_select(work_type)
     if session_start:
         ws_props["Session Start"] = {"date": {"start": session_start}}
@@ -197,7 +197,7 @@ def quick_add_task(
             "Project":      {"relation": [{"id": project_id}]},
             "Status":       {"select": {"name": "In Progress"}},
         }
-        if work_type and work_type in VALID_WORK_TYPES:
+        if work_type and work_type in _get_valid_work_types():
             cont_props["Work Type"] = p_select(work_type)
         cont_page            = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, cont_props)
         continuation_ws_url  = f"https://app.notion.com/p/{cont_page['id'].replace('-', '')}"

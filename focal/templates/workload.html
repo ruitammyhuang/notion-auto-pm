@@ -254,25 +254,31 @@ function renderBars(items, maxHours, fillClass) {
 // ── Work Type cell ─────────────────────────────────────────────────────────────
 
 function renderWtCell(s) {
-  const wsId = s.ws_id || "";
-  const wt   = s.work_type;
+  const wsId      = s.ws_id || "";
+  const wt        = s.work_type;
+  const locked    = s.locked_work_type;
+  const auditId   = s.latest_audit_id || "";
+  const wbsId     = s.wbs_page_id || "";
 
   if (!wsId) {
-    // No ws_id — can't edit; just show text
     return `<span class="wt-label">${wt || "—"}</span>`;
   }
 
   if (!wt || wt === "Unclassified") {
-    // Show dropdown immediately for unclassified
     return wtDropdown(wsId, "");
   }
 
-  // Classified — show label with pencil to switch
+  const lockIcon = locked
+    ? `<button class="wt-edit-btn" title="Recoded by health check — click to rollback"
+               style="color:#d97706;" onclick="wtRollback('${wbsId}','${auditId}','${wsId}')">↩</button>`
+    : "";
+
   return `
     <div class="wt-cell" id="wt-cell-${wsId}">
       <span class="wt-label">${wt}</span>
       <button class="wt-edit-btn" title="Change work type"
               onclick="wtStartEdit('${wsId}','${wt.replace(/'/g,"\\'")}')">✎</button>
+      ${lockIcon}
     </div>`;
 }
 
@@ -358,18 +364,50 @@ async function wtSave(wsId, workType, selectEl) {
 }
 
 function refreshUnclassifiedCount() {
-  // Recount from live DOM instead of re-fetching everything
-  const remaining = document.querySelectorAll(
-    ".wt-select option[value='']:checked"
-  ).length;
   const card = document.getElementById("stat-unclassified-card");
   const val  = document.getElementById("stat-unclassified");
   if (!val) return;
-  const n = parseInt(val.textContent) || 0;
-  // Decrement by 1 (one item just classified)
+  const n    = parseInt(val.textContent) || 0;
   const newN = Math.max(0, n - 1);
   val.textContent = newN;
   if (card) card.className = newN > 0 ? "stat-card warn" : "stat-card";
+}
+
+async function wtRollback(wbsId, auditId, wsId) {
+  if (!auditId) {
+    alert("No audit record found for this recode. Open the Health Check page to manage history.");
+    return;
+  }
+  // Fetch history to show what will be reverted
+  let prevType = "";
+  try {
+    const h = await fetch(`/api/recode/history/${wbsId}`).then(r => r.json());
+    const last = (h.history || []).filter(e => e.action !== "rollback").slice(-1)[0];
+    if (last) prevType = last.from_work_type || "";
+  } catch (_) {}
+
+  const msg = prevType
+    ? `Roll back to "${prevType}"? This will undo the health check recode.`
+    : "Roll back this recode? This will revert the work type to its previous value.";
+  if (!confirm(msg)) return;
+
+  const cell = document.getElementById(`wt-cell-${wsId}`);
+  if (cell) cell.innerHTML = `<span class="wt-saving">&#8635; Rolling back...</span>`;
+
+  try {
+    const r = await fetch(`/api/recode/rollback/${auditId}`, {
+      method: "POST", headers: {"Content-Type":"application/json"}
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      if (cell) cell.innerHTML = `<span class="wt-error">Rollback failed: ${d.error || ""}</span>`;
+      return;
+    }
+    // Reload page section to reflect new work type
+    load();
+  } catch (e) {
+    if (cell) cell.innerHTML = `<span class="wt-error">Error: ${e.message}</span>`;
+  }
 }
 
 // ── Sessions table ─────────────────────────────────────────────────────────────

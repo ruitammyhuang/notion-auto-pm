@@ -732,30 +732,58 @@
                        color:#718096;line-height:1;padding:0;flex-shrink:0;"
                 title="Show Work Type descriptions">?</button>
       </label>
-      <select id="qs-work-type">
+      <select id="qs-work-type" onchange="onWorkTypeChange(this)">
         <option value="">— leave blank —</option>
-        <option value="✍️ Writing">✍️ Writing</option>
-        <option value="🔍 Analysis">🔍 Analysis</option>
-        <option value="📐 Design &amp; Build">📐 Design &amp; Build</option>
-        <option value="✅ Review &amp; Assessment">✅ Review &amp; Assessment</option>
-        <option value="🤝 Meeting">🤝 Meeting</option>
-        <option value="⚙️ Admin">⚙️ Admin</option>
-        <option value="📣 Communication">📣 Communication</option>
+        <!-- populated by loadWorkTypes() on init -->
       </select>
-      <!-- Work Type reference card -->
+      <!-- Work Type reference card (descriptions populated dynamically) -->
       <div id="work-type-ref" style="display:none;margin-top:8px;padding:10px 12px;
            background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;
            line-height:1.7;color:#4a5568;">
         <strong style="display:block;margin-bottom:4px;color:#2d3748;">Work Type guide</strong>
-        <div><strong>✍️ Writing</strong> — producing text: manuscripts, syllabi, scripts, announcements, proposals</div>
-        <div><strong>🔍 Analysis</strong> — processing information: literature review, data coding, synthesis, EDA</div>
-        <div><strong>📐 Design &amp; Build</strong> — creating artifacts: course modules, rubrics, assignment pages, Canvas setup</div>
-        <div><strong>✅ Review &amp; Assessment</strong> — evaluating work: grading, peer review, feedback, discussion monitoring</div>
-        <div><strong>🤝 Meeting</strong> — synchronous interaction: team meetings, advising sessions, planning calls</div>
-        <div><strong>⚙️ Admin</strong> — operational tasks: forms, submissions, logistics, scheduling, registrations</div>
-        <div><strong>📣 Communication</strong> — async outreach: emails, invitations, announcements, recruitment</div>
+        <div id="work-type-ref-body"></div>
       </div>
-      <div class="field-hint">Sets Work Type on the task for workload dashboard tracking.</div>
+      <!-- Create new work type inline form (shown when "+ Create new type" is selected) -->
+      <div id="new-wt-form" style="display:none;margin-top:10px;padding:12px;
+           background:#fffbeb;border:1px solid #f6e05e;border-radius:6px;font-size:13px;">
+        <strong style="display:block;margin-bottom:8px;color:#2d3748;">Create new work type</strong>
+        <div style="display:grid;gap:8px;">
+          <input id="new-wt-name" type="text" placeholder="e.g. 🧪 Experimentation"
+                 style="font-size:13px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;">
+          <select id="new-wt-color" style="font-size:13px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;">
+            <option value="purple">purple</option>
+            <option value="blue">blue</option>
+            <option value="green">green</option>
+            <option value="yellow">yellow</option>
+            <option value="orange">orange</option>
+            <option value="gray">gray</option>
+            <option value="pink">pink</option>
+            <option value="red">red</option>
+            <option value="brown">brown</option>
+            <option value="default">default</option>
+          </select>
+          <input id="new-wt-desc" type="text" placeholder="Short description of when to use this type"
+                 style="font-size:13px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;">
+          <input id="new-wt-context" type="text" placeholder="Why are you adding this now? (optional, logged only)"
+                 style="font-size:13px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button type="button" onclick="submitNewWorkType()"
+                  style="background:#3182ce;color:#fff;border:none;border-radius:4px;
+                         padding:6px 14px;font-size:13px;cursor:pointer;">
+            Create &amp; Select
+          </button>
+          <button type="button" onclick="cancelNewWorkType()"
+                  style="background:none;border:1px solid #cbd5e0;border-radius:4px;
+                         padding:6px 14px;font-size:13px;cursor:pointer;color:#4a5568;">
+            Cancel
+          </button>
+          <span id="new-wt-status" style="align-self:center;font-size:12px;color:#718096;"></span>
+        </div>
+      </div>
+      <div class="field-hint">Sets Work Type on the task for workload dashboard tracking.
+        <a href="/health-check" style="color:#3182ce;font-size:11px;margin-left:4px;">Manage types</a>
+      </div>
     </div>
 
     <div class="field-group">
@@ -1314,6 +1342,8 @@ async function init() {
   if (cfg.sources) {
     state.savedSources = cfg.sources;
   }
+  // Pre-load work types for Quick Start dropdown
+  await loadWorkTypes();
   // Pre-load student roster into state (used by Quick Start student dropdown)
   const sr = await api("GET", "/api/students");
   if (sr.students) state.students = sr.students;
@@ -2704,6 +2734,97 @@ function onQsCategoryChange() {
 function toggleWorkTypeRef() {
   const el = document.getElementById("work-type-ref");
   el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+// ── Work Type dynamic dropdown ─────────────────────────────────────────────────
+let _workTypeFull = [];  // [{name, color, description, ...}]
+
+async function loadWorkTypes() {
+  try {
+    const r = await api("GET", "/api/work-types/full");
+    _workTypeFull = r.work_types || [];
+  } catch (_) {
+    // Fall back to names-only endpoint
+    try {
+      const r2 = await api("GET", "/api/work-types");
+      _workTypeFull = (r2.work_types || []).map(n => ({name: n, description: ""}));
+    } catch (__) { _workTypeFull = []; }
+  }
+  _populateWorkTypeDropdown(document.getElementById("qs-work-type").value);
+  _populateWorkTypeRef();
+}
+
+function _populateWorkTypeDropdown(selectedValue) {
+  const sel = document.getElementById("qs-work-type");
+  const prev = selectedValue || sel.value;
+  sel.innerHTML = '<option value="">— leave blank —</option>';
+  for (const wt of _workTypeFull) {
+    const opt = document.createElement("option");
+    opt.value = wt.name;
+    opt.textContent = wt.name;
+    if (wt.name === prev) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  const sep = document.createElement("option");
+  sep.disabled = true;
+  sep.textContent = "──────────";
+  sel.appendChild(sep);
+  const create = document.createElement("option");
+  create.value = "__create__";
+  create.textContent = "+ Create new type...";
+  sel.appendChild(create);
+}
+
+function _populateWorkTypeRef() {
+  const body = document.getElementById("work-type-ref-body");
+  if (!body) return;
+  body.innerHTML = _workTypeFull.map(wt =>
+    `<div><strong>${wt.name}</strong>${wt.description ? " — " + wt.description : ""}</div>`
+  ).join("");
+}
+
+function onWorkTypeChange(sel) {
+  if (sel.value === "__create__") {
+    sel.value = "";
+    document.getElementById("new-wt-form").style.display = "block";
+    document.getElementById("new-wt-name").focus();
+  }
+}
+
+function cancelNewWorkType() {
+  document.getElementById("new-wt-form").style.display = "none";
+  document.getElementById("new-wt-name").value = "";
+  document.getElementById("new-wt-desc").value = "";
+  document.getElementById("new-wt-context").value = "";
+  document.getElementById("new-wt-status").textContent = "";
+}
+
+async function submitNewWorkType() {
+  const name    = (document.getElementById("new-wt-name").value || "").trim();
+  const color   = document.getElementById("new-wt-color").value;
+  const desc    = (document.getElementById("new-wt-desc").value || "").trim();
+  const context = (document.getElementById("new-wt-context").value || "").trim();
+  const status  = document.getElementById("new-wt-status");
+
+  if (!name) { status.textContent = "Name is required."; return; }
+  status.textContent = "Creating...";
+
+  try {
+    const r = await api("POST", "/api/work-types/create", {name, color, description: desc, context});
+    if (r.error) { status.textContent = "Error: " + r.error; return; }
+    // Refresh dropdown with updated list and select new type
+    _workTypeFull = r.work_types || _workTypeFull;
+    _populateWorkTypeDropdown(name);
+    _populateWorkTypeRef();
+    document.getElementById("qs-work-type").value = name;
+    cancelNewWorkType();
+    const push = r.notion_push || {};
+    if (push.errors && push.errors.length) {
+      setStatus("qs-status", `Work type created. Notion push had ${push.errors.length} error(s) — run sync_work_type_options.py if needed.`, "orange");
+    }
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
+  }
 }
 
 // Convert any ISO-8601 string (UTC "Z" or offset) to datetime-local format (YYYY-MM-DDTHH:MM)

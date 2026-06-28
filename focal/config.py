@@ -57,24 +57,24 @@ PRIORITY_MAP = {
 VALID_PRIORITIES = ["Urgent", "High", "Normal", "Low"]
 
 # ── Work Type options ──────────────────────────────────────────────────────────
-# Single source of truth for all Work Type select columns across Notion.
-# To add or rename a category:
-#   1. Edit this list (name + color).
-#   2. Run:  python3 sync_work_type_options.py
-#      That script reads this list and pushes the options to every WBS database
-#      and Work Sessions in Notion. No other files need editing.
+# Source of truth is work_types.json (project root), managed by work_type_manager.py.
+# To add a new work type: use the /health-check UI or POST /api/work-types/create.
+# To push updated options to Notion: run python3 sync_work_type_options.py.
 #
-# Notion color palette: blue, brown, default, gray, green, orange, pink, purple, red, yellow
-WORK_TYPE_OPTIONS = [
-    {"name": "✍️ Writing",              "color": "purple"},
-    {"name": "🔍 Analysis",             "color": "blue"},
-    {"name": "📐 Design & Build",       "color": "green"},
-    {"name": "✅ Review & Assessment",  "color": "yellow"},
-    {"name": "🤝 Meeting",              "color": "orange"},
-    {"name": "⚙️ Admin",                "color": "gray"},
-    {"name": "📣 Communication",        "color": "pink"},
-]
-VALID_WORK_TYPES = [o["name"] for o in WORK_TYPE_OPTIONS]
+# WORK_TYPE_OPTIONS and VALID_WORK_TYPES are exposed via module __getattr__ below
+# so that `import focal.config; focal.config.VALID_WORK_TYPES` stays live.
+# Code that does `from focal.config import VALID_WORK_TYPES` gets a snapshot --
+# prefer importing get_valid_names from focal.work_type_manager in new code.
+
+
+def __getattr__(name: str):
+    if name == "WORK_TYPE_OPTIONS":
+        from focal.work_type_manager import get_work_type_options
+        return get_work_type_options()
+    if name == "VALID_WORK_TYPES":
+        from focal.work_type_manager import get_valid_names
+        return get_valid_names()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ── Config persistence ─────────────────────────────────────────────────────────

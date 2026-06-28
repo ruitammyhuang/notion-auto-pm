@@ -23,5 +23,10 @@ __pycache__/
 venv/
 .venv/
 
+# Work type health check -- generated runtime data, not source code
+recoding_audit.json
+health_check_reports/index.json
+health_check_reports/report_*.json
+
 # macOS
 .DS_Store

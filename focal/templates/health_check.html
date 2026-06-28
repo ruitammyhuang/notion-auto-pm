@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🩺 Work Type Health Check</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #f5f5f4; color: #1c1917; min-height: 100vh; }
+
+  header { background: #fff; border-bottom: 1px solid #e7e5e4; padding: 14px 24px;
+           display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+
+  .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer;
+         font-size: 13px; font-weight: 500; transition: background .15s; }
+  .btn-primary   { background: #2563eb; color: #fff; }
+  .btn-primary:hover   { background: #1d4ed8; }
+  .btn-secondary { background: #e7e5e4; color: #1c1917; }
+  .btn-secondary:hover { background: #d6d3d1; }
+  .btn-danger    { background: #dc2626; color: #fff; }
+  .btn-danger:hover    { background: #b91c1c; }
+  .btn:disabled  { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+  .section-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px;
+                  padding: 18px 22px; margin-bottom: 16px; }
+  .section-card h2 { font-size: 13px; font-weight: 600; color: #57534e;
+                     text-transform: uppercase; letter-spacing: .04em; margin-bottom: 14px; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-card { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px; padding: 14px 18px; }
+  .stat-card .val { font-size: 26px; font-weight: 700; line-height: 1; }
+  .stat-card .lbl { font-size: 11px; color: #78716c; margin-top: 4px; }
+  .stat-card.good .val  { color: #16a34a; }
+  .stat-card.warn .val  { color: #d97706; }
+  .stat-card.info .val  { color: #2563eb; }
+
+  .progress-bar { height: 6px; background: #e7e5e4; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #2563eb; border-radius: 3px; transition: width .4s; }
+
+  .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+  .alert-warn  { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+  .alert-error { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+  .alert-info  { background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; }
+  .alert-ok    { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+
+  /* Confidence slider */
+  .slider-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .slider-row label { font-size: 13px; color: #57534e; white-space: nowrap; }
+  input[type=range] { width: 160px; cursor: pointer; }
+  .slider-val { font-weight: 600; font-size: 13px; color: #2563eb; min-width: 28px; }
+
+  /* Recodings table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 0 10px 8px 0; color: #78716c; font-weight: 500;
+       font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+       border-bottom: 1px solid #e7e5e4; }
+  td { padding: 9px 10px 9px 0; border-bottom: 1px solid #f5f5f4; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.conf-high  { color: #16a34a; font-weight: 600; }
+  td.conf-mid   { color: #d97706; font-weight: 600; }
+  td.conf-low   { color: #dc2626; font-weight: 600; }
+
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px;
+           font-size: 11px; font-weight: 500; }
+  .badge-from { background: #fee2e2; color: #991b1b; }
+  .badge-to   { background: #dcfce7; color: #166534; }
+  .badge-low  { background: #fef3c7; color: #92400e; }
+
+  .rationale { font-size: 11px; color: #78716c; max-width: 280px; line-height: 1.4; }
+
+  /* New type cards */
+  .type-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .type-card { border: 1px solid #e7e5e4; border-radius: 8px; padding: 14px 16px; background: #fafaf9; }
+  .type-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .type-card p  { font-size: 12px; color: #57534e; line-height: 1.5; }
+  .type-card .impact { font-size: 11px; color: #2563eb; font-weight: 600; margin-top: 6px; }
+  .type-card .examples { font-size: 11px; color: #78716c; margin-top: 4px; }
+
+  /* Reports archive */
+  .report-row { display: flex; align-items: center; gap: 10px; padding: 10px 0;
+                border-bottom: 1px solid #f5f5f4; font-size: 13px; }
+  .report-row:last-child { border-bottom: none; }
+  .report-meta { flex: 1; }
+  .report-id   { font-size: 11px; color: #78716c; margin-top: 2px; font-family: monospace; }
+  .report-stats { font-size: 12px; color: #57534e; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px;
+             border: 2px solid #e7e5e4; border-top-color: #2563eb;
+             border-radius: 50%; animation: spin .7s linear infinite;
+             vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .bulk-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .count-badge { font-size: 12px; color: #78716c; }
+
+  .empty { text-align: center; padding: 32px; color: #a8a29e; font-size: 13px; }
+
+  .per-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .per-type-card { border: 1px solid #e7e5e4; border-radius: 6px; padding: 10px 14px;
+                   background: #fafaf9; font-size: 12px; }
+  .per-type-card .wt-name { font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+  .per-type-bar { height: 4px; background: #e7e5e4; border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .per-type-fill { height: 100%; background: #16a34a; border-radius: 2px; }
+
+  .section-toggle { cursor: pointer; user-select: none; }
+  .section-toggle::after { content: " ▾"; font-size: 10px; color: #78716c; }
+  .section-toggle.collapsed::after { content: " ▸"; }
+
+  @media (max-width: 680px) {
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🩺 Work Type Health Check</h1>
+  <a href="/workload" class="btn btn-secondary" style="text-decoration:none;">📊 Workload</a>
+  <a href="/focus"    class="btn btn-secondary" style="text-decoration:none;">📌 Focus</a>
+  <a href="/"         class="btn btn-secondary" style="text-decoration:none;">← Focal</a>
+</header>
+
+<main>
+
+  <!-- ── Status + Run ────────────────────────────────────────────────────────── -->
+  <div class="section-card">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;">
+        <div id="hc-status-line" style="font-size:14px;color:#57534e;">Loading last report...</div>
+        <div id="hc-cache-line"  style="font-size:12px;color:#78716c;margin-top:4px;"></div>
+      </div>
+      <button id="run-btn" class="btn btn-primary" onclick="runHealthCheck()">🔍 Run Health Check</button>
+    </div>
+    <div id="run-progress" style="display:none;margin-top:14px;">
+      <div style="font-size:13px;color:#57534e;margin-bottom:6px;">
+        <span class="spinner"></span><span id="run-msg">Starting...</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="run-bar" style="width:0%"></div></div>
+    </div>
+    <div id="run-alert" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- ── API Key input (if not set via env) ──────────────────────────────────── -->
+  <div class="section-card" id="api-key-section" style="display:none;">
+    <h2>Anthropic API Key</h2>
+    <p style="font-size:13px;color:#57534e;margin-bottom:10px;">
+      Needed to run the LLM analysis. Set the <code>ANTHROPIC_API_KEY</code> env var,
+      or enter it here (session only, not saved to disk).
+    </p>
+    <div style="display:flex;gap:8px;">
+      <input id="api-key-input" type="password" placeholder="sk-ant-..."
+             style="flex:1;font-size:13px;padding:6px 10px;border:1px solid #d6d3d1;border-radius:6px;">
+      <button class="btn btn-secondary" onclick="saveApiKey()">Use</button>
+    </div>
+  </div>
+
+  <!-- ── Summary stats ──────────────────────────────────────────────────────── -->
+  <div id="stats-section" style="display:none;">
+    <div class="stat-row">
+      <div class="stat-card" id="sc-confidence"><div class="val" id="sv-confidence">--</div><div class="lbl">Overall Confidence</div></div>
+      <div class="stat-card" id="sc-analyzed"><div class="val" id="sv-analyzed">--</div><div class="lbl">Records Analyzed</div></div>
+      <div class="stat-card" id="sc-miscoded"><div class="val" id="sv-miscoded">--</div><div class="lbl">Suggested Recodings</div></div>
+      <div class="stat-card info"><div class="val" id="sv-emerging">--</div><div class="lbl">Emerging Types Found</div></div>
+    </div>
+  </div>
+
+  <!-- ── Per-type stats ─────────────────────────────────────────────────────── -->
+  <div class="section-card" id="per-type-section" style="display:none;">
+    <h2 class="section-toggle" onclick="toggleSection('per-type-body')">Per Work Type</h2>
+    <div id="per-type-body" class="per-type-grid" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- ── Proposed recodings ─────────────────────────────────────────────────── -->
+  <div class="section-card" id="recodings-section" style="display:none;">
+    <h2>Proposed Recodings</h2>
+    <div class="slider-row">
+      <label>Show confidence >=</label>
+      <input type="range" id="conf-slider" min="0" max="100" value="50"
+             oninput="onSliderChange(this.value)">
+      <span class="slider-val" id="conf-val">50%</span>
+      <span class="count-badge" id="recoding-count"></span>
+    </div>
+    <div class="bulk-actions">
+      <button class="btn btn-secondary" onclick="selectHighConf()">Select High Confidence (85+)</button>
+      <button class="btn btn-secondary" onclick="selectAll()">Select All Visible</button>
+      <button class="btn btn-secondary" onclick="deselectAll()">Deselect All</button>
+      <button class="btn btn-primary"   id="apply-btn" onclick="applySelected()" disabled>Apply Selected</button>
+      <span id="apply-status" style="font-size:12px;color:#57534e;"></span>
+    </div>
+    <div id="recodings-table-wrap" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:28px;"><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
+            <th>Task</th>
+            <th>Project</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Conf.</th>
+            <th>Rationale</th>
+          </tr>
+        </thead>
+        <tbody id="recodings-body"></tbody>
+      </table>
+    </div>
+    <div id="recodings-empty" class="empty" style="display:none;">No proposed recodings at this threshold.</div>
+  </div>
+
+  <!-- ── Proposed new types ──────────────────────────────────────────────────── -->
+  <div class="section-card" id="emerging-section" style="display:none;">
+    <h2>Proposed New Work Types</h2>
+    <div id="emerging-cards" class="type-cards"></div>
+    <div id="emerging-empty" class="empty" style="display:none;">No new types proposed.</div>
+  </div>
+
+  <!-- ── Overlap analysis ────────────────────────────────────────────────────── -->
+  <div class="section-card" id="overlaps-section" style="display:none;">
+    <h2 class="section-toggle" onclick="toggleSection('overlaps-body')">Taxonomy Overlaps &amp; Clarity</h2>
+    <div id="overlaps-body" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- ── Reports archive ─────────────────────────────────────────────────────── -->
+  <div class="section-card">
+    <h2 class="section-toggle" onclick="toggleSection('reports-body')">Reports Archive</h2>
+    <div id="reports-body" style="margin-top:12px;">
+      <div class="empty">Loading...</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let _report       = null;
+let _batchId      = null;
+let _pollTimer    = null;
+let _sessionApiKey = "";
+let _allRecodings = [];   // full list, filtered by slider
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {"Content-Type":"application/json"} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+function el(id) { return document.getElementById(id); }
+
+function fmtDate(iso) {
+  if (!iso) return "Never";
+  const d = new Date(iso + (iso.includes("Z") ? "" : "Z"));
+  return d.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"}) +
+         " " + d.toLocaleTimeString(undefined, {hour:"2-digit", minute:"2-digit"});
+}
+
+function confClass(c) {
+  return c >= 85 ? "conf-high" : c >= 70 ? "conf-mid" : "conf-low";
+}
+
+function confBadge(c) {
+  const cls = c >= 85 ? "" : c >= 70 ? "badge-low" : "badge-low";
+  const flag = c < 50 ? " ⚠️" : c < 70 ? " !" : "";
+  return `<span class="${cls}" style="font-weight:600;color:${c>=85?"#16a34a":c>=70?"#d97706":"#dc2626"}">${c}%${flag}</span>`;
+}
+
+function toggleSection(id) {
+  const body = el(id);
+  const h    = body.previousElementSibling;
+  const hidden = body.style.display === "none";
+  body.style.display = hidden ? "" : "none";
+  if (h) h.classList.toggle("collapsed", !hidden);
+}
+
+function saveApiKey() {
+  _sessionApiKey = el("api-key-input").value.trim();
+  if (_sessionApiKey) el("api-key-section").style.display = "none";
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadCacheAge(), loadReports()]);
+  const lastReport = await getLastReport();
+  if (lastReport) renderReport(lastReport);
+}
+
+async function loadCacheAge() {
+  try {
+    const r = await api("GET", "/api/health-check/cache-age");
+    const line = el("hc-cache-line");
+    if (r.stale) {
+      line.innerHTML = `<span style="color:#d97706;">&#9888; ${r.message}
+        <button class="btn btn-secondary" onclick="window.location='/'" style="font-size:11px;padding:2px 8px;margin-left:6px;">Go Sync</button>
+        </span>`;
+    } else {
+      const mins = Math.round((r.age_seconds || 0) / 60);
+      line.textContent = `Cache age: ${mins < 60 ? mins + "m" : Math.round(mins/60) + "h"} old`;
+    }
+  } catch (_) {}
+}
+
+async function getLastReport() {
+  try {
+    const r = await api("GET", "/api/health-check/reports");
+    const idx = r.reports || [];
+    if (!idx.length) return null;
+    const latest = idx[0];
+    const full = await api("GET", `/api/health-check/report/${latest.batch_id}`);
+    return full.error ? null : full;
+  } catch (_) { return null; }
+}
+
+async function loadReports() {
+  try {
+    const r = await api("GET", "/api/health-check/reports");
+    renderReportsList(r.reports || []);
+  } catch (_) { el("reports-body").innerHTML = '<div class="empty">Could not load reports.</div>'; }
+}
+
+// ── Run health check ───────────────────────────────────────────────────────────
+async function runHealthCheck() {
+  el("run-btn").disabled = true;
+  el("run-progress").style.display = "block";
+  el("run-alert").innerHTML = "";
+  el("run-msg").textContent = "Starting...";
+  el("run-bar").style.width = "0%";
+
+  const body = {};
+  if (_sessionApiKey) body.api_key = _sessionApiKey;
+
+  try {
+    const r = await api("POST", "/api/health-check/run", body);
+    if (r.error) {
+      showRunAlert("error", r.error);
+      el("run-btn").disabled = false;
+      el("run-progress").style.display = "none";
+      return;
+    }
+    _batchId = r.batch_id;
+    _pollTimer = setInterval(pollStatus, 2000);
+  } catch (e) {
+    showRunAlert("error", e.message);
+    el("run-btn").disabled = false;
+    el("run-progress").style.display = "none";
+  }
+}
+
+async function pollStatus() {
+  try {
+    const r = await api("GET", `/api/health-check/status?batch_id=${_batchId}`);
+    el("run-bar").style.width = (r.progress_pct || 0) + "%";
+    el("run-msg").textContent = r.progress_msg || "Running...";
+
+    if (r.status === "complete") {
+      clearInterval(_pollTimer);
+      el("run-progress").style.display = "none";
+      el("run-btn").disabled = false;
+      const report = await api("GET", `/api/health-check/report/${_batchId}`);
+      renderReport(report);
+      showRunAlert("ok", "Health check complete.");
+      loadReports();
+    } else if (r.status === "error") {
+      clearInterval(_pollTimer);
+      el("run-progress").style.display = "none";
+      el("run-btn").disabled = false;
+      const msg = r.error || "Unknown error";
+      if (msg.includes("API key") || msg.includes("ANTHROPIC")) {
+        el("api-key-section").style.display = "block";
+      }
+      showRunAlert("error", "Health check failed: " + msg);
+    }
+  } catch (_) {}
+}
+
+function showRunAlert(type, msg) {
+  const cls = {ok:"alert-ok", error:"alert-error", warn:"alert-warn"}[type] || "alert-info";
+  el("run-alert").innerHTML = `<div class="alert ${cls}">${msg}</div>`;
+}
+
+// ── Render report ──────────────────────────────────────────────────────────────
+function renderReport(report) {
+  _report    = report;
+  _batchId   = report.batch_id;
+  const sum  = report.summary || {};
+  const samp = report.sampling || {};
+
+  // Status line
+  el("hc-status-line").textContent =
+    `Last check: ${fmtDate(report.generated_at)}  |  ` +
+    `${samp.sampled || 0} records sampled from ${(samp.projects_covered || []).length} projects`;
+
+  // Stats cards
+  el("stats-section").style.display = "block";
+  const conf = sum.overall_confidence_pct || 0;
+  el("sv-confidence").textContent = conf + "%";
+  el("sc-confidence").className = "stat-card " + (conf >= 80 ? "good" : conf >= 65 ? "warn" : "");
+  el("sv-analyzed").textContent  = sum.total_analyzed || 0;
+  el("sv-miscoded").textContent  = (report.proposed_recodings || []).length;
+  el("sc-miscoded").className    = "stat-card " + ((report.proposed_recodings || []).length > 0 ? "warn" : "good");
+  el("sv-emerging").textContent  = (report.proposed_new_types || []).length;
+
+  // Per-type stats
+  renderPerTypeStats(report.per_type_stats || []);
+
+  // Store recodings and render
+  _allRecodings = report.proposed_recodings || [];
+  onSliderChange(el("conf-slider").value);
+  el("recodings-section").style.display = _allRecodings.length ? "block" : "none";
+
+  // Emerging types
+  renderEmergingTypes(report.proposed_new_types || []);
+
+  // Overlaps
+  renderOverlaps(report.proposed_mergers || []);
+}
+
+function renderPerTypeStats(stats) {
+  if (!stats.length) { el("per-type-section").style.display = "none"; return; }
+  el("per-type-section").style.display = "block";
+  const maxSampled = Math.max(...stats.map(s => s.sampled || 0), 1);
+  el("per-type-body").innerHTML = stats.map(s => {
+    const correctPct = s.sampled ? Math.round((s.correct / s.sampled) * 100) : 0;
+    return `<div class="per-type-card">
+      <div class="wt-name">${s.name}</div>
+      <div style="color:#78716c">Sampled: ${s.sampled} &nbsp; Correct: ${s.correct} &nbsp; Issues: ${s.miscoded}</div>
+      <div style="color:#57534e;margin-top:2px;">Avg confidence: ${s.avg_confidence}%</div>
+      <div class="per-type-bar"><div class="per-type-fill" style="width:${correctPct}%;background:${correctPct>=80?"#16a34a":correctPct>=65?"#d97706":"#dc2626"}"></div></div>
+    </div>`;
+  }).join("");
+}
+
+function renderEmergingTypes(types) {
+  if (!types.length) {
+    el("emerging-section").style.display = "block";
+    el("emerging-cards").innerHTML = "";
+    el("emerging-empty").style.display = "block";
+    return;
+  }
+  el("emerging-section").style.display = "block";
+  el("emerging-empty").style.display = "none";
+  el("emerging-cards").innerHTML = types.map((t, i) => `
+    <div class="type-card" id="emerging-${i}">
+      <h3>${t.proposed_name || "Unnamed"}</h3>
+      <p>${t.rationale || ""}</p>
+      ${t.projected_impact_pct ? `<div class="impact">~${t.projected_impact_pct}% of records may fit</div>` : ""}
+      ${(t.example_descriptions || []).length ? `<div class="examples">Examples: ${(t.example_descriptions || []).slice(0,3).join("; ")}</div>` : ""}
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" style="font-size:12px;padding:4px 10px;"
+                onclick="createFromSuggestion(${i})">Create This Type</button>
+        <span id="emerging-status-${i}" style="font-size:12px;color:#78716c;align-self:center;"></span>
+      </div>
+    </div>`).join("");
+}
+
+async function createFromSuggestion(idx) {
+  const types = (_report || {}).proposed_new_types || [];
+  const t     = types[idx];
+  if (!t) return;
+  const status = el(`emerging-status-${idx}`);
+  status.textContent = "Creating...";
+  try {
+    const r = await api("POST", "/api/work-types/create", {
+      name: t.proposed_name,
+      color: "default",
+      description: t.rationale || "",
+      context: `Suggested by health check ${_batchId}`,
+    });
+    if (r.error) { status.textContent = "Error: " + r.error; return; }
+    status.textContent = "Created!";
+    el(`emerging-${idx}`).style.opacity = ".5";
+  } catch (e) { status.textContent = "Error: " + e.message; }
+}
+
+function renderOverlaps(overlaps) {
+  if (!overlaps.length) { el("overlaps-section").style.display = "none"; return; }
+  el("overlaps-section").style.display = "block";
+  el("overlaps-body").innerHTML = overlaps.map(o => `
+    <div style="padding:10px 0;border-bottom:1px solid #f5f5f4;">
+      <strong>${o.type_a} + ${o.type_b}</strong>
+      <span class="badge" style="background:#e0e7ff;color:#3730a3;margin-left:8px;">${o.suggested_action}</span>
+      <p style="font-size:13px;color:#57534e;margin-top:4px;">${o.overlap_description}</p>
+      ${o.suggestion_detail ? `<p style="font-size:12px;color:#78716c;margin-top:2px;">Suggestion: ${o.suggestion_detail}</p>` : ""}
+    </div>`).join("");
+}
+
+// ── Recodings table ────────────────────────────────────────────────────────────
+function onSliderChange(val) {
+  val = parseInt(val);
+  el("conf-val").textContent = val + "%";
+  el("conf-slider").value = val;
+  renderRecodings(val);
+}
+
+function renderRecodings(minConf) {
+  const visible = _allRecodings.filter(r => (r.confidence || 0) >= minConf);
+  el("recoding-count").textContent = `${visible.length} shown`;
+
+  if (!visible.length) {
+    el("recodings-table-wrap").style.display = "none";
+    el("recodings-empty").style.display = "block";
+    el("apply-btn").disabled = true;
+    return;
+  }
+  el("recodings-table-wrap").style.display = "block";
+  el("recodings-empty").style.display = "none";
+
+  el("recodings-body").innerHTML = visible.map((r, i) => {
+    const c   = r.confidence || 0;
+    const low = c < 50;
+    return `<tr id="recode-row-${i}" data-record-id="${r.record_id}" data-index="${_allRecodings.indexOf(r)}">
+      <td><input type="checkbox" class="recode-chk" value="${_allRecodings.indexOf(r)}"
+                 ${c >= 85 ? "" : ""} onchange="updateApplyBtn()"></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+          title="${(r.task_name||"").replace(/"/g,"&quot;")}">${r.task_name || "(no name)"}</td>
+      <td style="font-size:12px;color:#78716c;">${r.project || ""}</td>
+      <td><span class="badge badge-from">${r.current_work_type || ""}</span></td>
+      <td><span class="badge badge-to">${r.suggested_work_type || ""}</span></td>
+      <td class="${confClass(c)}">${confBadge(c)}${low ? '<div style="font-size:10px;color:#dc2626;">Review carefully</div>' : ""}</td>
+      <td class="rationale">${r.rationale || ""}</td>
+    </tr>`;
+  }).join("");
+  updateApplyBtn();
+}
+
+function updateApplyBtn() {
+  const checked = document.querySelectorAll(".recode-chk:checked").length;
+  el("apply-btn").disabled = checked === 0;
+  el("apply-btn").textContent = checked ? `Apply ${checked} Selected` : "Apply Selected";
+}
+
+function selectHighConf() {
+  document.querySelectorAll(".recode-chk").forEach(chk => {
+    const idx = parseInt(chk.value);
+    const rec = _allRecodings[idx];
+    chk.checked = rec && (rec.confidence || 0) >= 85;
+  });
+  updateApplyBtn();
+}
+
+function selectAll() {
+  document.querySelectorAll(".recode-chk").forEach(c => c.checked = true);
+  updateApplyBtn();
+}
+
+function deselectAll() {
+  document.querySelectorAll(".recode-chk").forEach(c => c.checked = false);
+  updateApplyBtn();
+}
+
+function toggleAll(masterChk) {
+  document.querySelectorAll(".recode-chk").forEach(c => c.checked = masterChk.checked);
+  updateApplyBtn();
+}
+
+async function applySelected() {
+  const checked = [...document.querySelectorAll(".recode-chk:checked")];
+  if (!checked.length) return;
+
+  const toApply = checked.map(chk => _allRecodings[parseInt(chk.value)]).filter(Boolean);
+  const applyStatus = el("apply-status");
+  el("apply-btn").disabled = true;
+  applyStatus.textContent = "Applying...";
+
+  try {
+    const r = await api("POST", "/api/recode/apply", {
+      batch_id:  _batchId,
+      recodings: toApply.map(rec => ({
+        record_id:           rec.record_id,
+        ws_id:               rec.ws_id || "",
+        current_work_type:   rec.current_work_type,
+        suggested_work_type: rec.suggested_work_type,
+        confidence:          rec.confidence,
+        rationale:           rec.rationale,
+      })),
+    });
+
+    if (r.error) { applyStatus.textContent = "Error: " + r.error; el("apply-btn").disabled = false; return; }
+
+    applyStatus.textContent = `Applied ${r.applied} recode(s).${r.failed ? " " + r.failed + " failed." : ""}`;
+
+    // Remove applied rows from display
+    const appliedIds = new Set(toApply.map(t => t.record_id));
+    _allRecodings = _allRecodings.filter(r => !appliedIds.has(r.record_id));
+    onSliderChange(el("conf-slider").value);
+
+    if (r.errors && r.errors.length) {
+      el("run-alert").innerHTML = `<div class="alert alert-warn">Some recodings had warnings:<br>${r.errors.join("<br>")}</div>`;
+    }
+  } catch (e) {
+    applyStatus.textContent = "Error: " + e.message;
+    el("apply-btn").disabled = false;
+  }
+}
+
+// ── Reports archive ────────────────────────────────────────────────────────────
+function renderReportsList(reports) {
+  if (!reports.length) {
+    el("reports-body").innerHTML = '<div class="empty">No health check reports yet. Run your first check above.</div>';
+    return;
+  }
+  el("reports-body").innerHTML = reports.map(r => `
+    <div class="report-row">
+      <div class="report-meta">
+        <div>${fmtDate(r.generated_at)}</div>
+        <div class="report-id">${r.batch_id}</div>
+      </div>
+      <div class="report-stats">
+        ${r.sampled || 0} sampled &nbsp;|&nbsp;
+        <span style="color:${(r.overall_confidence||0)>=80?"#16a34a":"#d97706"}">${r.overall_confidence || 0}% conf</span> &nbsp;|&nbsp;
+        ${r.proposed_recodings || 0} recodings
+      </div>
+      <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;"
+              onclick="loadReport('${r.batch_id}')">View</button>
+    </div>`).join("");
+}
+
+async function loadReport(batchId) {
+  try {
+    const r = await api("GET", `/api/health-check/report/${batchId}`);
+    if (r.error) { alert("Could not load report: " + r.error); return; }
+    renderReport(r);
+    window.scrollTo({top: 0, behavior: "smooth"});
+    el("run-alert").innerHTML = `<div class="alert alert-info">Viewing report ${batchId}</div>`;
+  } catch (e) { alert("Error: " + e.message); }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

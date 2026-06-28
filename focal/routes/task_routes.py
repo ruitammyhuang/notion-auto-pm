@@ -19,7 +19,6 @@ from flask import Blueprint, jsonify, request
 
 from ..config import (
     WORK_SESSIONS_DB_ID,
-    VALID_WORK_TYPES,
     load_config,
     load_sessions_mappings,
     save_sessions_mappings,
@@ -29,6 +28,7 @@ from ..config import (
 from ..notion_client import NotionClient, extract, p_title, p_text, p_date
 from ..sync_engine import regenerate_focus_cache
 from ..tasks import quick_add_task, delete_task_cascade, _next_continuation_name
+from ..work_type_manager import get_valid_names as _get_valid_work_types, get_work_types
 
 bp = Blueprint("tasks", __name__)
 
@@ -584,8 +584,8 @@ def api_delete_task():
 
 @bp.route("/api/work-types", methods=["GET"])
 def api_work_types():
-    """Return the list of valid Work Type values."""
-    return jsonify({"work_types": VALID_WORK_TYPES})
+    """Return the list of valid Work Type values (names only, for backward compat)."""
+    return jsonify({"work_types": _get_valid_work_types()})
 
 
 @bp.route("/api/set-work-type", methods=["POST"])
@@ -612,8 +612,9 @@ def api_set_work_type():
         return jsonify({"error": "ws_id required"}), 400
     if not work_type:
         return jsonify({"error": "work_type required"}), 400
-    if work_type not in VALID_WORK_TYPES:
-        return jsonify({"error": f"Invalid work_type. Valid values: {VALID_WORK_TYPES}"}), 400
+    valid_wt = _get_valid_work_types()
+    if work_type not in valid_wt:
+        return jsonify({"error": f"Invalid work_type. Valid values: {valid_wt}"}), 400
 
     cfg   = load_config()
     token = cfg.get("token", "").strip()
