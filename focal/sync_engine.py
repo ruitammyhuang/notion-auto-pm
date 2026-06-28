@@ -147,13 +147,15 @@ def regenerate_focus_cache(client: NotionClient) -> None:
         for wbs_id, info in mappings.items():
             if not isinstance(info, dict):
                 continue
+            if info.get("deleted"):
+                continue
             ws_id       = info.get("ws_id", "")
             planned_end = info.get("planned_end", "")
             if not ws_id or not planned_end:
                 continue
 
             status = ws_status.get(ws_id, info.get("status", ""))
-            if status == "Completed":
+            if status in ("Completed", "Session Done"):
                 continue
 
             wbs_clean = wbs_id.replace("-", "")
