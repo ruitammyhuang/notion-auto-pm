@@ -503,11 +503,10 @@
 <!-- ── QUICK START TAB ──────────────────────────────────────────────────── -->
 <div id="pane-quick" class="pane">
   <div class="card">
-    <h3>Add Task &amp; Start Session</h3>
+    <h3>Work Session</h3>
     <div class="hint">
-      Add a new task to a project and begin a Work Session in one click.
-      The task is created in the Project WBS, Master WBS Tasks, and Work Sessions simultaneously.
-      If you're already mid-task and just want to log time, open Work Sessions in Notion and add a row manually instead.
+      Add a new task to a project and begin a Work Session, or load an existing task from
+      <a href="/focus" style="color:#2563eb;">Focus Tasks</a> to log a session.
     </div>
 
     <div class="field-group">
@@ -1323,6 +1322,33 @@ async function init() {
     if (!pr.error) state.projects = pr.projects;
   }
   refreshSyncTab();
+  _autoLoadFocusTask();
+}
+
+function _autoLoadFocusTask() {
+  const raw = localStorage.getItem("focal_load_task");
+  if (!raw) return;
+  localStorage.removeItem("focal_load_task");
+  let task;
+  try { task = JSON.parse(raw); } catch { return; }
+
+  switchTab("quick");
+  setTimeout(() => {
+    const sel = document.getElementById("qs-source");
+    if (sel && task.source_db_id) {
+      sel.value = task.source_db_id;
+      onQsSourceChange();
+    }
+    selectExistingTask(
+      task.ws_id,
+      task.name,
+      task.ws_url,
+      task.priority    || "Normal",
+      task.work_type   || "",
+      task.planned_end || "",
+      "", ""
+    );
+  }, 50);
 }
 
 // ── API helper ────────────────────────────────────────────────────────────────

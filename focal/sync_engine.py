@@ -32,7 +32,7 @@ import hashlib
 import json
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -171,11 +171,12 @@ def regenerate_focus_cache(client: NotionClient) -> None:
                 "work_type":    info.get("work_type", ""),
                 "project_name": info.get("project_name", ""),
                 "ws_status":    status,
+                "source_db_id": info.get("source_db_id", ""),
             })
 
         tasks.sort(key=lambda t: t["planned_end"])
         cache = {
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "task_count":   len(tasks),
             "tasks":        tasks,
         }
@@ -187,7 +188,7 @@ def regenerate_focus_cache(client: NotionClient) -> None:
 
 
 def _write_empty_cache() -> None:
-    cache = {"generated_at": datetime.utcnow().isoformat() + "Z",
+    cache = {"generated_at": datetime.now(timezone.utc).isoformat(),
              "task_count": 0, "tasks": []}
     with open(FOCUS_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)

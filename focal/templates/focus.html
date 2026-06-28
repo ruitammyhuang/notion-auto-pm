@@ -180,6 +180,40 @@
     margin-right: 6px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  .focus-task-radio {
+    flex-shrink: 0;
+    margin-top: 4px;
+    accent-color: #2563eb;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+  }
+
+  #focus-action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 2px solid #2563eb;
+    padding: 12px 24px;
+    display: none;
+    align-items: center;
+    gap: 16px;
+    z-index: 20;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+  }
+  #focus-selected-label {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1c1917;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  body.has-action-bar main { padding-bottom: 72px; }
 </style>
 </head>
 <body>
@@ -192,6 +226,11 @@
   <button class="btn btn-primary"   id="btn-refresh" onclick="loadFocus()">Refresh</button>
   <a href="/" class="btn btn-secondary" style="text-decoration:none;">← Focal</a>
 </header>
+
+<div id="focus-action-bar">
+  <span id="focus-selected-label"></span>
+  <button class="btn btn-primary" onclick="loadTaskIntoWS()">⚡ Add to Work Session</button>
+</div>
 
 <main id="main-content">
   <div class="loading"><span class="spinner"></span> Loading focus tasks…</div>
@@ -216,13 +255,17 @@ function priorityTag(p) {
 }
 
 function renderTask(t, showDue) {
-  const due   = showDue && t.planned_end ? ` · Due ${fmtDate(t.planned_end)}` : "";
-  const wt    = t.work_type ? ` · ${t.work_type}` : "";
-  const proj  = t.project_name ? `<span>${t.project_name}</span>` : "";
-  const ptag  = priorityTag(t.priority);
-  const notes = t.notes ? `<div class="task-notes">${t.notes}</div>` : "";
+  const due      = showDue && t.planned_end ? ` · Due ${fmtDate(t.planned_end)}` : "";
+  const wt       = t.work_type ? ` · ${t.work_type}` : "";
+  const proj     = t.project_name ? `<span>${t.project_name}</span>` : "";
+  const ptag     = priorityTag(t.priority);
+  const notes    = t.notes ? `<div class="task-notes">${t.notes}</div>` : "";
+  const taskJson = JSON.stringify(t).replace(/"/g, '&quot;');
   return `
     <div class="task-card">
+      <input type="radio" name="focus-task-radio" class="focus-task-radio"
+             value="${t.ws_id}" data-task="${taskJson}"
+             onchange="onFocusTaskSelect(this)">
       ${priorityDot(t.priority)}
       <div class="task-body">
         <a class="task-name" href="${t.url.replace('https://', 'notion://')}">${t.name}</a>
@@ -295,10 +338,35 @@ function renderFocusTabs(activeTab) {
 
   document.getElementById("main-content").innerHTML =
     `<div class="tab-bar">${tabBar}</div>` + bucketHtml;
+
+  // Restore radio selection after re-render
+  if (window._focusSelectedTask) {
+    const r = document.querySelector(
+      `input[name="focus-task-radio"][value="${window._focusSelectedTask.ws_id}"]`
+    );
+    if (r) r.checked = true;
+  }
 }
 
 function switchFocusTab(tab) {
   renderFocusTabs(tab);
+}
+
+window._focusSelectedTask = null;
+
+function onFocusTaskSelect(radio) {
+  window._focusSelectedTask = JSON.parse(radio.dataset.task);
+  document.getElementById("focus-selected-label").textContent =
+    window._focusSelectedTask.name;
+  const bar = document.getElementById("focus-action-bar");
+  bar.style.display = "flex";
+  document.body.classList.add("has-action-bar");
+}
+
+function loadTaskIntoWS() {
+  if (!window._focusSelectedTask) return;
+  localStorage.setItem("focal_load_task", JSON.stringify(window._focusSelectedTask));
+  window.location.href = "/";
 }
 
 async function loadFocus() {
