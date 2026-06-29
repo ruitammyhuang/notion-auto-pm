@@ -1169,6 +1169,13 @@
       <div style="color:#78716c;font-size:13px;">Loading...</div>
     </div>
 
+    <div style="margin-top:10px;">
+      <button class="btn btn-secondary" onclick="pushAllWorkTypes()" id="wt-push-btn">
+        🔄 Push all to Notion
+      </button>
+      <span id="wt-push-status" style="font-size:12px;margin-left:10px;color:#78716c;"></span>
+    </div>
+
     <hr style="border:none;border-top:1px solid #e7e5e4;margin:20px 0;">
 
     <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">Add New Work Type</h4>
@@ -3652,7 +3659,10 @@ async function createWorkType() {
     if (data.error) { status.innerHTML = `<span style="color:#dc2626">${escHtml(data.error)}</span>`; return; }
 
     const push = data.notion_push || {};
-    status.innerHTML = `<span style="color:#16a34a">Created. Notion: ${push.ok_count} DBs updated${push.errors?.length ? ` (${push.errors.length} failed)` : ""}.</span>`;
+    const failNote = push.errors?.length
+      ? `<br><span style="color:#ca8a04">Failed (${push.errors.length}): ${push.errors.map(e => escHtml(e)).join("; ")}</span>`
+      : "";
+    status.innerHTML = `<span style="color:#16a34a">Created. Notion: ${push.ok_count} DBs updated.</span>${failNote}`;
     document.getElementById("wt-new-name").value = "";
     document.getElementById("wt-new-desc").value = "";
     refreshWorkTypesTab();
@@ -3662,8 +3672,31 @@ async function createWorkType() {
   }
 }
 
+async function pushAllWorkTypes() {
+  const btn    = document.getElementById("wt-push-btn");
+  const status = document.getElementById("wt-push-status");
+  btn.disabled = true;
+  status.textContent = "Pushing...";
+  try {
+    const res  = await fetch("/api/work-types/push-all", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.error) { status.innerHTML = `<span style="color:#dc2626">${escHtml(data.error)}</span>`; return; }
+    const push = data.notion_push || {};
+    const failNote = push.errors?.length
+      ? `<br><span style="color:#ca8a04">Failed (${push.errors.length}): ${push.errors.map(e => escHtml(e)).join("; ")}</span>`
+      : "";
+    status.innerHTML = `<span style="color:#16a34a">${push.ok_count} DBs updated.</span>${failNote}`;
+  } catch(e) {
+    status.innerHTML = `<span style="color:#dc2626">Error: ${escHtml(e.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function updateWorkTypeColor(name, color) {
-  const wrap = document.getElementById("wt-list-wrap");
   try {
     const res  = await fetch("/api/work-types/update", {
       method: "POST", headers: {"Content-Type":"application/json"},
@@ -3673,7 +3706,7 @@ async function updateWorkTypeColor(name, color) {
     if (data.error) { alert("Update failed: " + data.error); refreshWorkTypesTab(); return; }
     const push = data.notion_push || {};
     if (push.errors?.length) {
-      console.warn("Work type color updated but some Notion DBs failed:", push.errors);
+      alert(`Color updated, but ${push.errors.length} DB(s) failed to sync:\n${push.errors.join("\n")}`);
     }
     refreshWorkTypesTab();
     loadWorkTypeDropdown();

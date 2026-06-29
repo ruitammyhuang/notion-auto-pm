@@ -57,6 +57,19 @@ def _push_to_notion(client: NotionClient, cfg: dict) -> dict:
     return {"ok_count": ok_count, "fail_count": fail_count, "errors": errors}
 
 
+@bp.route("/api/work-types/push-all", methods=["POST"])
+def api_work_types_push_all():
+    """Push current work_types.json to all Notion databases without changing any types."""
+    body  = request.json or {}
+    token = body.get("token", "").strip() or load_config().get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No token"}), 400
+    cfg         = load_config()
+    client      = NotionClient(token)
+    notion_push = _push_to_notion(client, cfg)
+    return jsonify({"ok": True, "notion_push": notion_push})
+
+
 @bp.route("/api/work-types/full", methods=["GET"])
 def api_work_types_full():
     """Return active work types with name, color, and description."""
