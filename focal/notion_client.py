@@ -179,6 +179,15 @@ class NotionClient:
             timeout=15,
         )
 
+    def patch_database(self, db_id: str, data: dict) -> requests.Response:
+        """PATCH a database schema (e.g. update select options)."""
+        return requests.patch(
+            f"{NOTION_API}/databases/{db_id}",
+            headers=self._headers,
+            json=data,
+            timeout=15,
+        )
+
     def get_block_children(self, block_id: str) -> list:
         """Return all child blocks of a page/block."""
         r = requests.get(

@@ -292,6 +292,7 @@
   <div class="tab" onclick="switchTab('quick')">⚡ Work Session Tasks</div>
   <div class="tab" onclick="switchTab('students')">🎓 Students</div>
   <div class="tab" onclick="switchTab('orphans')">🔍 Orphan Audit</div>
+  <div class="tab" onclick="switchTab('worktypes')">🏷 Work Types</div>
   <div class="tab" onclick="switchTab('help')">❓ Help</div>
   <div class="tab" onclick="window.open('/design','_blank')">📐 Design Doc</div>
 </div>
@@ -1154,6 +1155,55 @@
 
   </div><!-- /orphan-results -->
 </div><!-- /pane-orphans -->
+
+<!-- ── WORK TYPES TAB ────────────────────────────────────────────────────── -->
+<div id="pane-worktypes" class="pane">
+  <div class="card">
+    <h3>Work Types</h3>
+    <p style="font-size:13px;color:#57534e;margin-bottom:16px;">
+      Manage work type categories used across all WBS databases and Work Sessions.
+      Any change is pushed to Notion automatically.
+    </p>
+
+    <div id="wt-list-wrap">
+      <div style="color:#78716c;font-size:13px;">Loading...</div>
+    </div>
+
+    <hr style="border:none;border-top:1px solid #e7e5e4;margin:20px 0;">
+
+    <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">Add New Work Type</h4>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <div>
+        <label style="display:block;font-size:12px;font-weight:500;margin-bottom:4px;">Name (include emoji)</label>
+        <input type="text" id="wt-new-name" placeholder="🎯 Example Type"
+               style="width:220px;font-size:13px;padding:6px 10px;border:1px solid #d6d3d1;border-radius:5px;">
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:500;margin-bottom:4px;">Color</label>
+        <select id="wt-new-color"
+                style="font-size:13px;padding:6px 10px;border:1px solid #d6d3d1;border-radius:5px;background:#fff;">
+          <option value="blue">blue</option>
+          <option value="brown">brown</option>
+          <option value="default">default</option>
+          <option value="gray">gray</option>
+          <option value="green">green</option>
+          <option value="orange">orange</option>
+          <option value="pink">pink</option>
+          <option value="purple" selected>purple</option>
+          <option value="red">red</option>
+          <option value="yellow">yellow</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:500;margin-bottom:4px;">Description (optional)</label>
+        <input type="text" id="wt-new-desc" placeholder="When to use this type..."
+               style="width:260px;font-size:13px;padding:6px 10px;border:1px solid #d6d3d1;border-radius:5px;">
+      </div>
+      <button class="btn btn-primary" onclick="createWorkType()">Add &amp; Push to Notion</button>
+    </div>
+    <div id="wt-create-status" style="margin-top:10px;font-size:13px;"></div>
+  </div>
+</div><!-- /pane-worktypes -->
 
 <!-- ── HELP TAB ──────────────────────────────────────────────────────────── -->
 <div id="pane-help" class="pane">
@@ -2547,6 +2597,7 @@ async function runLogSession() {
 
 // ── Quick Start tab ───────────────────────────────────────────────────────────
 function refreshQuickTab() {
+  loadWorkTypeDropdown();
   const sel = document.getElementById("qs-source");
   if (!sel) return;
   const current = sel.value;
@@ -3021,7 +3072,7 @@ async function runPushToWbs() {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t,i)=> {
-    const names = ["setup","sources","sync","quick","students","orphans","help",""];
+    const names = ["setup","sources","sync","quick","students","orphans","worktypes","help",""];
     t.classList.toggle("active", names[i]===name);
   });
   document.querySelectorAll(".pane").forEach(p => {
@@ -3030,7 +3081,8 @@ function switchTab(name) {
   if (name === "sync")     refreshSyncTab();
   if (name === "quick")    refreshQuickTab();
   if (name === "students") refreshStudentsTab();
-  if (name === "orphans")  orphanTabOpened();
+  if (name === "orphans")   orphanTabOpened();
+  if (name === "worktypes") refreshWorkTypesTab();
 }
 
 // ── Orphan Audit tab ──────────────────────────────────────────────────────────
@@ -3500,6 +3552,151 @@ function escHtml(str) {
   return String(str||"")
     .replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Work Types tab ─────────────────────────────────────────────────────────────
+
+const WT_COLOR_CSS = {
+  blue:    "#3b82f6", brown:  "#92400e", default: "#78716c",
+  gray:    "#9ca3af", green:  "#22c55e", orange:  "#f97316",
+  pink:    "#ec4899", purple: "#a855f7", red:     "#ef4444",
+  yellow:  "#eab308",
+};
+
+function wtColorSwatch(color) {
+  const bg = WT_COLOR_CSS[color] || "#78716c";
+  return `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${bg};margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>`;
+}
+
+async function refreshWorkTypesTab() {
+  const wrap = document.getElementById("wt-list-wrap");
+  if (!wrap) return;
+  try {
+    const res  = await fetch("/api/work-types/full");
+    const data = await res.json();
+    if (data.error) { wrap.innerHTML = `<div style="color:#dc2626">${escHtml(data.error)}</div>`; return; }
+
+    const types = data.work_types || [];
+    if (types.length === 0) {
+      wrap.innerHTML = '<div style="color:#78716c;font-size:13px;">No work types defined yet.</div>';
+      return;
+    }
+
+    const rows = types.map(t => `
+      <tr data-wt-name="${escHtml(t.name)}">
+        <td style="padding:8px 10px;white-space:nowrap;">
+          ${wtColorSwatch(t.color)}<strong>${escHtml(t.name)}</strong>
+        </td>
+        <td style="padding:8px 10px;font-size:12px;color:#57534e;max-width:300px;">${escHtml(t.description || "")}</td>
+        <td style="padding:8px 10px;">
+          <select onchange="updateWorkTypeColor('${escHtml(t.name)}', this.value)"
+                  style="font-size:12px;padding:3px 6px;border:1px solid #d6d3d1;border-radius:4px;background:#fff;">
+            ${(data.notion_colors || []).map(c =>
+              `<option value="${c}"${c === t.color ? " selected" : ""}>${c}</option>`
+            ).join("")}
+          </select>
+        </td>
+        <td style="padding:8px 10px;">
+          <button onclick="deprecateWorkType('${escHtml(t.name)}')"
+                  style="font-size:11px;padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;
+                         background:#fee2e2;color:#dc2626;cursor:pointer;">Remove</button>
+        </td>
+      </tr>`).join("");
+
+    wrap.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:2px solid #e7e5e4;">
+            <th style="padding:6px 10px;text-align:left;font-weight:600;">Name</th>
+            <th style="padding:6px 10px;text-align:left;font-weight:600;">Description</th>
+            <th style="padding:6px 10px;text-align:left;font-weight:600;">Color</th>
+            <th style="padding:6px 10px;"></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch(e) {
+    wrap.innerHTML = `<div style="color:#dc2626">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadWorkTypeDropdown() {
+  const sel = document.getElementById("qs-work-type");
+  if (!sel) return;
+  try {
+    const res  = await fetch("/api/work-types/full");
+    const data = await res.json();
+    if (data.error || !data.work_types) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— leave blank —</option>' +
+      data.work_types.map(t => `<option value="${escHtml(t.name)}">${escHtml(t.name)}</option>`).join("");
+    if (current) sel.value = current;
+  } catch(e) { /* silently keep existing hardcoded options */ }
+}
+
+async function createWorkType() {
+  const name  = (document.getElementById("wt-new-name")  || {}).value?.trim() || "";
+  const color = (document.getElementById("wt-new-color") || {}).value || "";
+  const desc  = (document.getElementById("wt-new-desc")  || {}).value?.trim() || "";
+  const status = document.getElementById("wt-create-status");
+
+  if (!name) { status.innerHTML = '<span style="color:#dc2626">Name is required.</span>'; return; }
+
+  status.innerHTML = '<span style="color:#78716c">Saving and pushing to Notion...</span>';
+  try {
+    const res  = await fetch("/api/work-types/create", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({name, color, description: desc})
+    });
+    const data = await res.json();
+    if (data.error) { status.innerHTML = `<span style="color:#dc2626">${escHtml(data.error)}</span>`; return; }
+
+    const push = data.notion_push || {};
+    status.innerHTML = `<span style="color:#16a34a">Created. Notion: ${push.ok_count} DBs updated${push.errors?.length ? ` (${push.errors.length} failed)` : ""}.</span>`;
+    document.getElementById("wt-new-name").value = "";
+    document.getElementById("wt-new-desc").value = "";
+    refreshWorkTypesTab();
+    loadWorkTypeDropdown();
+  } catch(e) {
+    status.innerHTML = `<span style="color:#dc2626">Error: ${escHtml(e.message)}</span>`;
+  }
+}
+
+async function updateWorkTypeColor(name, color) {
+  const wrap = document.getElementById("wt-list-wrap");
+  try {
+    const res  = await fetch("/api/work-types/update", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({name, color})
+    });
+    const data = await res.json();
+    if (data.error) { alert("Update failed: " + data.error); refreshWorkTypesTab(); return; }
+    const push = data.notion_push || {};
+    if (push.errors?.length) {
+      console.warn("Work type color updated but some Notion DBs failed:", push.errors);
+    }
+    refreshWorkTypesTab();
+    loadWorkTypeDropdown();
+  } catch(e) {
+    alert("Update failed: " + e.message);
+    refreshWorkTypesTab();
+  }
+}
+
+async function deprecateWorkType(name) {
+  if (!confirm(`Remove work type "${name}"? It will no longer appear in dropdowns (existing Notion records using this value are preserved).`)) return;
+  try {
+    const res  = await fetch("/api/work-types/deprecate", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({name})
+    });
+    const data = await res.json();
+    if (data.error) { alert("Remove failed: " + data.error); return; }
+    refreshWorkTypesTab();
+    loadWorkTypeDropdown();
+  } catch(e) {
+    alert("Remove failed: " + e.message);
+  }
 }
 
 init();

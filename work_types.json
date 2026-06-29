@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "work_types": [
+    {
+      "name": "✍️ Writing",
+      "color": "purple",
+      "description": "Producing text: manuscripts, syllabi, scripts, announcements, proposals",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    },
+    {
+      "name": "🔍 Analysis",
+      "color": "blue",
+      "description": "Processing information: literature review, data coding, synthesis, EDA",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    },
+    {
+      "name": "📐 Design & Build",
+      "color": "green",
+      "description": "Creating artifacts: course modules, rubrics, assignment pages, Canvas setup",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    },
+    {
+      "name": "✅ Review & Assessment",
+      "color": "yellow",
+      "description": "Evaluating work: grading, peer review, feedback, discussion monitoring",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    },
+    {
+      "name": "🤝 Meeting",
+      "color": "orange",
+      "description": "Synchronous interaction: team meetings, advising sessions, planning calls",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    },
+    {
+      "name": "⚙️ Admin",
+      "color": "gray",
+      "description": "Operational tasks: forms, submissions, logistics, scheduling, registrations",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    },
+    {
+      "name": "📣 Communication",
+      "color": "pink",
+      "description": "Async outreach: emails, invitations, announcements, recruitment",
+      "examples": [],
+      "created_at": "2026-06-27T00:00:00",
+      "deprecated": false,
+      "version": 1,
+      "former_names": []
+    }
+  ],
+  "creation_log": []
+}
