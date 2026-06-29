@@ -416,6 +416,7 @@ def api_push_to_wbs():
     new_task_name  = body.get("new_task_name", "").strip()
     artifact_url   = body.get("artifact_url", "").strip()
     artifact_label = body.get("artifact_label", "").strip() or "Resource"
+    new_due_date   = body.get("new_due_date")   # None = not provided; "" = clear the date
 
     if not token:
         return jsonify({"error": "No token — save one in the Setup tab first"}), 400
@@ -455,14 +456,18 @@ def api_push_to_wbs():
             "warning": ("Work Session not found in local mappings — run a Sync first."),
         })
 
-    # Find task_name_field from config
+    # Find task_name_field and planned_end_field from config
     config  = load_config()
     sources = config.get("sources", {})
-    task_name_field = sources.get(source_db_id, {}).get("field_map", {}).get("task_name", "Task")
+    task_name_field   = sources.get(source_db_id, {}).get("field_map", {}).get("task_name",   "Task")
+    planned_end_field = sources.get(source_db_id, {}).get("field_map", {}).get("planned_end", "Due Date")
+
+    props_patch = {task_name_field: p_title(task_name)}
+    if new_due_date is not None:
+        props_patch[planned_end_field] = p_date({"start": new_due_date} if new_due_date else None)
 
     try:
-        wr = client.patch_page(wbs_page_id,
-                               {"properties": {task_name_field: p_title(task_name)}})
+        wr = client.patch_page(wbs_page_id, {"properties": props_patch})
         wr.raise_for_status()
     except Exception as e:
         return jsonify({"error": f"Failed to update WBS task: {e}"}), 500
@@ -495,7 +500,14 @@ def api_push_to_wbs():
     # Update local mapping cache
     if wbs_page_id in mappings and isinstance(mappings[wbs_page_id], dict):
         mappings[wbs_page_id]["name"] = task_name
+        if new_due_date is not None:
+            mappings[wbs_page_id]["planned_end"] = new_due_date
         save_sessions_mappings(mappings)
+        if new_due_date is not None:
+            try:
+                regenerate_focus_cache(client)
+            except Exception:
+                pass
 
     return jsonify({
         "ok":            True,

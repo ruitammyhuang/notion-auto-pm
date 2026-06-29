@@ -94,12 +94,16 @@ def api_focus_tasks():
             result.sort(key=lambda t: priority_order.get(t.get("priority", "Normal"), 2))
         return result
 
+    project_names = sorted({t.get("project_name", "") for t in all_tasks if t.get("project_name")})
+
     return jsonify({
         "today":            today_s,
         "week_end":         week_s,
         "overdue":          filter_and_sort(buckets["overdue"],   sort_by_date=True),
         "due_today":        filter_and_sort(buckets["due_today"], sort_by_date=False),
         "this_week":        filter_and_sort(buckets["this_week"], sort_by_date=True),
+        "all_uncompleted":  all_tasks,
+        "project_names":    project_names,
         "generated_at":     generated_at,
         "cache_task_count": cache_count,
     })

@@ -214,6 +214,75 @@
     text-overflow: ellipsis;
   }
   body.has-action-bar main { padding-bottom: 72px; }
+
+  .btn-danger { background: #fee2e2; color: #dc2626; }
+  .btn-danger:hover { background: #fecaca; }
+
+  .task-name-row { display: flex; align-items: center; gap: 6px; }
+  .edit-btn {
+    opacity: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: #78716c;
+    transition: opacity .15s;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .task-card:hover .edit-btn { opacity: 1; }
+  .edit-form { display: flex; flex-direction: column; gap: 8px; }
+  .edit-input {
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid #e7e5e4;
+    border-radius: 6px;
+    width: 100%;
+    color: #1c1917;
+    font-family: inherit;
+  }
+  .edit-input:focus { outline: none; border-color: #2563eb; }
+  .edit-actions { display: flex; gap: 8px; }
+
+  .all-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid #e7e5e4;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .all-controls select {
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid #e7e5e4;
+    border-radius: 6px;
+    color: #1c1917;
+    background: #fff;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .sort-toggle { display: flex; gap: 4px; }
+  .sort-btn {
+    padding: 5px 12px;
+    border: 1px solid #e7e5e4;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: #57534e;
+    transition: all .15s;
+    font-family: inherit;
+  }
+  .sort-btn.active { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+  .sort-btn:hover:not(.active) { background: #f5f5f4; }
 </style>
 </head>
 <body>
@@ -229,6 +298,7 @@
 
 <div id="focus-action-bar">
   <span id="focus-selected-label"></span>
+  <button class="btn btn-danger" onclick="deleteSelectedTask()">🗑 Delete</button>
   <button class="btn btn-primary" onclick="loadTaskIntoWS()">⚡ Add to Work Session</button>
 </div>
 
@@ -237,6 +307,10 @@
 </main>
 
 <script>
+function escHtml(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function fmtDate(iso) {
   if (!iso) return "";
   const d = new Date(iso + "T00:00:00");
@@ -259,16 +333,19 @@ function renderTask(t, showDue) {
   const wt       = t.work_type ? ` · ${t.work_type}` : "";
   const proj     = t.project_name ? `<span>${t.project_name}</span>` : "";
   const ptag     = priorityTag(t.priority);
-  const notes    = t.notes ? `<div class="task-notes">${t.notes}</div>` : "";
+  const notes    = t.notes ? `<div class="task-notes">${escHtml(t.notes)}</div>` : "";
   const taskJson = JSON.stringify(t).replace(/"/g, '&quot;');
   return `
-    <div class="task-card">
+    <div class="task-card" data-wsid="${t.ws_id}">
       <input type="radio" name="focus-task-radio" class="focus-task-radio"
              value="${t.ws_id}" data-task="${taskJson}"
              onchange="onFocusTaskSelect(this)">
       ${priorityDot(t.priority)}
       <div class="task-body">
-        <a class="task-name" href="${t.url.replace('https://', 'notion://')}">${t.name}</a>
+        <div class="task-name-row">
+          <a class="task-name" href="${t.url.replace('https://', 'notion://')}">${escHtml(t.name)}</a>
+          <button class="edit-btn" onclick="editTask('${t.ws_id}')" title="Edit task name or due date">✏️</button>
+        </div>
         <div class="task-meta">${proj}${ptag}<span>${t.priority}${due}${wt}</span></div>
         ${notes}
       </div>
@@ -312,14 +389,16 @@ function renderFocusTabs(activeTab) {
   if (!data) return;
   window._focusActiveTab = activeTab;
 
+  const allCount = (data.all_uncompleted || []).length;
   const tabs = [
-    { key: "overdue",   emoji: "🔴", label: "Overdue",   count: data.overdue.length },
-    { key: "today",     emoji: "🟡", label: "Today",     count: data.due_today.length },
-    { key: "this_week", emoji: "🔵", label: "This Week", count: data.this_week.length },
+    { key: "overdue",   emoji: "🔴", label: "Overdue",   count: data.overdue.length,   redBadge: true  },
+    { key: "today",     emoji: "🟡", label: "Today",     count: data.due_today.length,  redBadge: true  },
+    { key: "this_week", emoji: "🔵", label: "This Week", count: data.this_week.length,  redBadge: true  },
+    { key: "all",       emoji: "⚪", label: "All",       count: allCount,               redBadge: false },
   ];
 
   const tabBar = tabs.map(t => {
-    const hasItems = t.count > 0;
+    const hasItems = t.count > 0 && t.redBadge;
     const badgeCls = hasItems ? "tab-badge has-items" : "tab-badge";
     return `<button class="tab-btn${t.key === activeTab ? " active" : ""}"
       onclick="switchFocusTab('${t.key}')">
@@ -327,17 +406,19 @@ function renderFocusTabs(activeTab) {
     </button>`;
   }).join("");
 
-  let bucketHtml;
+  let contentHtml;
   if (activeTab === "overdue") {
-    bucketHtml = renderBucket("Overdue",       "🔴", data.overdue,   true,  null);
+    contentHtml = renderBucket("Overdue",       "🔴", data.overdue,   true,  null);
   } else if (activeTab === "today") {
-    bucketHtml = renderBucket("Due Today",     "🟡", data.due_today, false, null);
+    contentHtml = renderBucket("Due Today",     "🟡", data.due_today, false, null);
+  } else if (activeTab === "this_week") {
+    contentHtml = renderBucket("Due This Week", "🔵", data.this_week, true,  data.week_end);
   } else {
-    bucketHtml = renderBucket("Due This Week", "🔵", data.this_week, true,  data.week_end);
+    contentHtml = renderAllTabContent(data);
   }
 
   document.getElementById("main-content").innerHTML =
-    `<div class="tab-bar">${tabBar}</div>` + bucketHtml;
+    `<div class="tab-bar">${tabBar}</div>` + contentHtml;
 
   // Restore radio selection after re-render
   if (window._focusSelectedTask) {
@@ -348,11 +429,54 @@ function renderFocusTabs(activeTab) {
   }
 }
 
+function renderAllTabContent(data) {
+  const sort    = window._focusAllSort    || "due";
+  const project = window._focusAllProject || "";
+
+  let tasks = (data.all_uncompleted || []).slice();
+  if (project) tasks = tasks.filter(t => t.project_name === project);
+
+  if (sort === "due") {
+    tasks.sort((a, b) => (a.planned_end || "9999") < (b.planned_end || "9999") ? -1 : 1);
+  } else {
+    tasks.sort((a, b) => {
+      const pc = (a.project_name || "").localeCompare(b.project_name || "");
+      return pc !== 0 ? pc : ((a.planned_end || "9999") < (b.planned_end || "9999") ? -1 : 1);
+    });
+  }
+
+  const projOptions = (data.project_names || []).map(p =>
+    `<option value="${escHtml(p)}"${p === project ? " selected" : ""}>${escHtml(p)}</option>`
+  ).join("");
+
+  const taskRows = tasks.length === 0
+    ? '<div class="empty-msg">No uncompleted tasks match the filter.</div>'
+    : tasks.map(t => renderTask(t, true)).join("");
+
+  return `
+    <div class="all-controls">
+      <select onchange="window._focusAllProject=this.value;renderFocusTabs('all')">
+        <option value=""${!project ? " selected" : ""}>All Projects</option>
+        ${projOptions}
+      </select>
+      <div class="sort-toggle">
+        <button class="sort-btn${sort === 'due'     ? ' active' : ''}"
+          onclick="window._focusAllSort='due';renderFocusTabs('all')">By Due Date</button>
+        <button class="sort-btn${sort === 'project' ? ' active' : ''}"
+          onclick="window._focusAllSort='project';renderFocusTabs('all')">By Project</button>
+      </div>
+      <span style="color:#78716c">${tasks.length} task${tasks.length !== 1 ? "s" : ""}</span>
+    </div>
+    <div class="bucket">${taskRows}</div>`;
+}
+
 function switchFocusTab(tab) {
   renderFocusTabs(tab);
 }
 
 window._focusSelectedTask = null;
+window._focusAllSort      = "due";
+window._focusAllProject   = "";
 
 function onFocusTaskSelect(radio) {
   window._focusSelectedTask = JSON.parse(radio.dataset.task);
@@ -369,6 +493,74 @@ function loadTaskIntoWS() {
   window.location.href = "/";
 }
 
+async function deleteSelectedTask() {
+  const task = window._focusSelectedTask;
+  if (!task) return;
+  if (!confirm(`Delete "${task.name}" and archive all linked Notion pages? This cannot be undone.`)) return;
+  try {
+    const res  = await fetch("/api/delete-task", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ws_id: task.ws_id})
+    });
+    const data = await res.json();
+    if (data.error) { alert("Error: " + data.error); return; }
+    window._focusSelectedTask = null;
+    document.getElementById("focus-action-bar").style.display = "none";
+    document.body.classList.remove("has-action-bar");
+    await loadFocus();
+  } catch(e) {
+    alert("Error: " + e.message);
+  }
+}
+
+function editTask(wsId) {
+  const card = document.querySelector(`.task-card[data-wsid="${wsId}"]`);
+  if (!card) return;
+  const radio = card.querySelector("input[type='radio']");
+  const t = JSON.parse(radio.dataset.task);
+  const body = card.querySelector(".task-body");
+  body.innerHTML = `
+    <div class="edit-form">
+      <input type="text"  id="edit-name-${wsId}" class="edit-input" value="${escHtml(t.name)}" placeholder="Task name">
+      <input type="date"  id="edit-date-${wsId}" class="edit-input" value="${t.planned_end || ""}">
+      <div class="edit-actions">
+        <button class="btn btn-primary"   style="padding:5px 12px;font-size:12px"
+          onclick="saveTaskEdit('${wsId}')">Save</button>
+        <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px"
+          onclick="renderFocusTabs(window._focusActiveTab)">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById(`edit-name-${wsId}`).focus();
+}
+
+async function saveTaskEdit(wsId) {
+  const newName = (document.getElementById(`edit-name-${wsId}`) || {}).value || "";
+  const newDue  = (document.getElementById(`edit-date-${wsId}`) || {}).value || "";
+  if (!newName.trim()) { alert("Task name cannot be empty."); return; }
+
+  const saveBtn = document.querySelector(`.task-card[data-wsid="${wsId}"] .btn-primary`);
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
+
+  try {
+    const res  = await fetch("/api/push-to-wbs", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({work_session_id: wsId, new_task_name: newName.trim(), new_due_date: newDue})
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert("Error: " + data.error);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save"; }
+      return;
+    }
+    await loadFocus();
+  } catch(e) {
+    alert("Error: " + e.message);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save"; }
+  }
+}
+
 async function loadFocus() {
   setButtons(true);
   const main = document.getElementById("main-content");
@@ -382,10 +574,8 @@ async function loadFocus() {
     const data = await res.json();
     if (data.error) { showError(data.error); return; }
 
-    const total  = data.overdue.length + data.due_today.length + data.this_week.length;
-    const all    = [...data.overdue, ...data.due_today, ...data.this_week];
-    const urgent = all.filter(t => t.priority === "Urgent").length;
-    const high   = all.filter(t => t.priority === "High").length;
+    const total    = data.overdue.length + data.due_today.length + data.this_week.length;
+    const allCount = (data.all_uncompleted || []).length;
 
     const genAt = data.generated_at
       ? new Date(data.generated_at).toLocaleString("en-US",
@@ -394,15 +584,16 @@ async function loadFocus() {
     document.getElementById("meta-line").textContent =
       `Cache: ${genAt} · ${data.cache_task_count} tasks total`;
 
-    if (total === 0) {
+    window._focusData = data;
+
+    if (total === 0 && allCount === 0) {
       main.innerHTML = `<div class="all-clear">🎉<p>No tasks due or overdue. Enjoy the breathing room!</p></div>`;
       return;
     }
 
-    // Cache data for tab switching without re-fetching
-    window._focusData = data;
-    // On first load default to Today; on refresh preserve the active tab
-    renderFocusTabs(window._focusActiveTab || "today");
+    // Default to Today if there are date-bucket tasks; otherwise open All tab
+    const defaultTab = total > 0 ? "today" : "all";
+    renderFocusTabs(window._focusActiveTab || defaultTab);
   } catch(e) {
     showError(e.message);
   } finally {
