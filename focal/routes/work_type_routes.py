@@ -30,14 +30,40 @@ from ..work_type_manager import (
 bp = Blueprint("work_types", __name__)
 
 
+def _merge_options(client: NotionClient, db_id: str, col_name: str,
+                   new_options: list[dict]) -> list[dict]:
+    """Return a merged options list safe to PATCH.
+
+    Existing options are identified by their Notion id (which prevents a 400
+    when Notion rejects color changes on already-existing options).
+    New options (not yet in the DB) are appended with their specified color.
+    """
+    try:
+        schema  = client.get_db_schema(db_id)
+        col     = schema.get("properties", {}).get(col_name, {})
+        existing = {o["name"]: o for o in col.get("select", {}).get("options", [])}
+    except Exception:
+        existing = {}
+
+    merged = []
+    for opt in new_options:
+        if opt["name"] in existing:
+            # Keep the stored option as-is (id + name + existing color)
+            merged.append(existing[opt["name"]])
+        else:
+            merged.append({"name": opt["name"], "color": opt["color"]})
+    return merged
+
+
 def _push_to_notion(client: NotionClient, cfg: dict) -> dict:
     """Push current work_types.json options to Work Sessions and all WBS DBs."""
-    options    = get_work_type_options()
-    ok_count   = 0
-    fail_count = 0
+    new_options = get_work_type_options()
+    ok_count    = 0
+    fail_count  = 0
     errors: list[str] = []
 
-    ws_payload = {"properties": {"Work Type": {"select": {"options": options}}}}
+    ws_options  = _merge_options(client, WORK_SESSIONS_DB_ID, "Work Type", new_options)
+    ws_payload  = {"properties": {"Work Type": {"select": {"options": ws_options}}}}
     r = client.patch_database(WORK_SESSIONS_DB_ID, ws_payload)
     if not r.ok:
         errors.append(f"Work Sessions DB: HTTP {r.status_code}")
@@ -46,7 +72,8 @@ def _push_to_notion(client: NotionClient, cfg: dict) -> dict:
         col_name = src.get("field_map", {}).get("work_type", "")
         if not col_name:
             continue
-        payload = {"properties": {col_name: {"select": {"options": options}}}}
+        merged  = _merge_options(client, db_id, col_name, new_options)
+        payload = {"properties": {col_name: {"select": {"options": merged}}}}
         r = client.patch_database(db_id, payload)
         if r.ok:
             ok_count += 1
