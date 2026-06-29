@@ -175,9 +175,12 @@ def api_workload():
     end_s   = end.isoformat()
 
     client = NotionClient(token)
+    # Use the next calendar day as the upper bound so sessions logged in any
+    # US timezone (up to UTC-8) are included even when stored in UTC.
+    filter_end = (end + datetime.timedelta(days=1)).isoformat()
     filter_body = {"and": [
         {"property": "Session Start", "date": {"on_or_after":  start_s}},
-        {"property": "Session Start", "date": {"on_or_before": end_s + "T23:59:59"}},
+        {"property": "Session Start", "date": {"on_or_before": filter_end}},
     ]}
     try:
         raw_sessions = client.query_db(WORK_SESSIONS_DB_ID, filter_body)
@@ -227,7 +230,7 @@ def api_workload():
                 def _parse_iso(ts: str):
                     return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 diff = (_parse_iso(sess_end) - _parse_iso(sess_start)).total_seconds()
-                if diff > 0:
+                if diff != 0:
                     duration = diff / 3600.0
             except Exception:
                 pass
@@ -254,7 +257,7 @@ def api_workload():
             "ws_id":     s["id"],   # raw page ID for inline work-type editing
         })
 
-        if duration:
+        if duration is not None and duration > 0:
             total_hours             += duration
             by_project[proj_name]   = by_project.get(proj_name, 0)   + duration
             by_work_type[work_type] = by_work_type.get(work_type, 0) + duration

@@ -218,6 +218,7 @@ function buildPayload() {
 // ── Formatters ─────────────────────────────────────────────────────────────────
 function fmtHours(h) {
   if (h == null) return "—";
+  if (h < 0) return "⚠️ check times";
   const hrs = Math.floor(h), mins = Math.round((h - hrs) * 60);
   return hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`) : `${mins}m`;
 }
