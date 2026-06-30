@@ -26,7 +26,7 @@ from ..config import (
     update_student_phase,
 )
 from ..work_type_manager import get_valid_names
-from ..notion_client import NotionClient, extract, p_title, p_text, p_date
+from ..notion_client import NotionClient, extract, p_title, p_text, p_date, p_select
 from ..sync_engine import regenerate_focus_cache
 from ..tasks import quick_add_task, delete_task_cascade, _next_continuation_name
 
@@ -701,3 +701,180 @@ def api_set_work_type():
         })
 
     return jsonify({"ok": True, "wbs_updated": True})
+
+
+# ── Project picker ─────────────────────────────────────────────────────────────
+
+@bp.route("/api/project-sources", methods=["GET"])
+def api_project_sources():
+    """Return all configured WBS sources sorted by name, for the project picker."""
+    sources = load_config().get("sources", {})
+    result  = sorted(
+        [
+            {
+                "source_db_id": db_id,
+                "project_name": src.get("db_title", db_id[:8]),
+                "project_id":   src.get("project_id", ""),
+            }
+            for db_id, src in sources.items()
+        ],
+        key=lambda x: x["project_name"].lower(),
+    )
+    return jsonify({"sources": result})
+
+
+@bp.route("/api/move-task-project", methods=["POST"])
+def api_move_task_project():
+    """
+    Move a task from its current project's WBS database to a different one.
+
+    Notion does not allow moving pages between databases, so this:
+      1. Creates a new WBS page in the target DB.
+      2. Patches the backlink relation on the new WBS page to the same master_id.
+      3. Patches Master WBS entry and Work Session to the new project_id.
+      4. Archives the old WBS page.
+      5. Updates sessions_mappings and regenerates the focus cache.
+
+    Body: { ws_id, target_source_db_id, new_task_name?, new_due_date? }
+    """
+    body                = request.json or {}
+    ws_id               = (body.get("ws_id") or "").strip()
+    target_source_db_id = (body.get("target_source_db_id") or "").strip()
+    new_task_name       = (body.get("new_task_name") or "").strip()
+    new_due_date        = body.get("new_due_date")  # None = not provided; "" = clear
+
+    if not ws_id:
+        return jsonify({"error": "ws_id required"}), 400
+    if not target_source_db_id:
+        return jsonify({"error": "target_source_db_id required"}), 400
+
+    ws_id = _extract_page_id(ws_id) or ws_id
+
+    cfg   = load_config()
+    token = cfg.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "No Notion token — save one in the Setup tab first"}), 400
+
+    sources = cfg.get("sources", {})
+    if target_source_db_id not in sources:
+        return jsonify({"error": f"Unknown target_source_db_id: {target_source_db_id}"}), 400
+
+    # ── 1. Locate current mapping entry via ws_id ─────────────────────────────
+    mappings   = load_sessions_mappings()
+    old_wbs_id = None
+    old_info   = None
+    for wbs_id, info in mappings.items():
+        if isinstance(info, dict) and info.get("ws_id") == ws_id:
+            old_wbs_id = wbs_id
+            old_info   = info
+            break
+
+    if not old_wbs_id:
+        return jsonify({"error": "Task not found in local mappings — run a Sync first."}), 404
+
+    master_id        = old_info.get("master_id", "")
+    task_name        = new_task_name or old_info.get("name", "")
+    planned_end      = new_due_date if new_due_date is not None else old_info.get("planned_end", "")
+    priority         = old_info.get("priority", "")
+    work_type        = old_info.get("work_type", "")
+    old_source_db_id = old_info.get("source_db_id", "")
+
+    if old_source_db_id == target_source_db_id:
+        return jsonify({"error": "Task is already in that project."}), 400
+
+    # ── 2. Target DB config ───────────────────────────────────────────────────
+    target_cfg          = sources[target_source_db_id]
+    target_fmap         = target_cfg.get("field_map", {})
+    backlink_field      = target_cfg.get("backlink_field", "Master WBS")
+    target_project_id   = target_cfg.get("project_id", "")
+    target_project_name = target_cfg.get("db_title", target_source_db_id[:8])
+
+    if not target_project_id:
+        return jsonify({"error": "Target project has no project_id configured."}), 400
+
+    client = NotionClient(token)
+
+    # ── 3. Create new WBS page in target DB ───────────────────────────────────
+    task_name_field = target_fmap.get("task_name", "Task")
+    props: dict = {task_name_field: p_title(task_name)}
+
+    pe_field = target_fmap.get("planned_end", "")
+    if pe_field and planned_end:
+        props[pe_field] = p_date({"start": planned_end})
+
+    priority_field = target_fmap.get("priority", "")
+    if priority_field and priority:
+        props[priority_field] = p_select(priority)
+
+    wt_field = target_fmap.get("work_type", "")
+    if wt_field and work_type:
+        props[wt_field] = p_select(work_type)
+
+    try:
+        new_wbs_page = client.create_page({"database_id": target_source_db_id}, props)
+        new_wbs_id   = new_wbs_page["id"]
+    except Exception as e:
+        return jsonify({"error": f"Failed to create new WBS page: {e}"}), 500
+
+    # ── 4. Patch backlink on new WBS page ─────────────────────────────────────
+    if master_id and backlink_field:
+        try:
+            client.patch_page(new_wbs_id, {
+                "properties": {backlink_field: {"relation": [{"id": master_id}]}}
+            })
+        except Exception:
+            pass  # Non-fatal; sync will repair the backlink
+
+    # ── 5. Patch Master WBS entry's Project relation ───────────────────────────
+    if master_id:
+        try:
+            r = client.patch_page(master_id, {
+                "properties": {"Project": {"relation": [{"id": target_project_id}]}}
+            })
+            if not r.ok:
+                return jsonify({"error": f"Failed to update Master WBS entry: {r.status_code}"}), 500
+        except Exception as e:
+            return jsonify({"error": f"Failed to update Master WBS entry: {e}"}), 500
+
+    # ── 6. Patch Work Session ─────────────────────────────────────────────────
+    ws_patch: dict = {"Project": {"relation": [{"id": target_project_id}]}}
+    if new_task_name:
+        ws_patch["Session Name"] = p_title(new_task_name)
+    try:
+        r = client.patch_page(ws_id, {"properties": ws_patch})
+        if not r.ok:
+            return jsonify({"error": f"Failed to update Work Session: {r.status_code}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Failed to update Work Session: {e}"}), 500
+
+    # ── 7. Archive old WBS page ───────────────────────────────────────────────
+    try:
+        client.patch_page(old_wbs_id, {"archived": True})
+    except Exception:
+        pass  # Non-fatal; next sync treats stale backlink as orphan
+
+    # ── 8. Update sessions_mappings ───────────────────────────────────────────
+    new_info = {
+        **old_info,
+        "source_db_id": target_source_db_id,
+        "project_id":   target_project_id,
+        "project_name": target_project_name,
+        "name":         task_name,
+        "planned_end":  planned_end,
+    }
+    del mappings[old_wbs_id]
+    mappings[new_wbs_id] = new_info
+    save_sessions_mappings(mappings)
+
+    # ── 9. Regenerate focus cache ─────────────────────────────────────────────
+    try:
+        regenerate_focus_cache(client)
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok":           True,
+        "task_name":    task_name,
+        "project_name": target_project_name,
+        "new_wbs_id":   new_wbs_id,
+    })

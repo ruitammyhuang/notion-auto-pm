@@ -134,6 +134,18 @@ write it back. Do not touch `token` or `db_filter`.
 - [ ] `backlink_field` is "Master WBS" (unless user specifies otherwise)
 - [ ] No field_map key maps to an empty string -- omit unmapped fields entirely
 
+**Step 5 -- Push canonical work type options to the new DB:**
+If the entry includes `work_type` in `field_map`, run this immediately after
+saving the config entry (while the DB's Work Type column is still empty):
+
+```
+python3 sync_work_type_options.py --db-id <new_db_id> --col "<work_type_col_name>"
+```
+
+where `<work_type_col_name>` is the value of `field_map.work_type` (usually
+"Work Type"). This seeds the column with the canonical color scheme from
+`work_types.json` before any task rows are created, preventing color drift.
+
 ## Common mistakes
 
 **Wrong key** -- must be the WBS *database* ID, not the hub page ID or

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from ..config import load_students, save_students, upsert_student, update_student_phase
+from ..config import load_students, save_students, upsert_student, update_student_phase, archive_student
 
 bp = Blueprint("students", __name__)
 
@@ -65,17 +65,17 @@ def api_update_student_phase():
     return jsonify({"ok": True, "updated": found})
 
 
-@bp.route("/api/students/delete", methods=["POST"])
-def api_delete_student():
-    """Permanently remove a student by name."""
-    body = request.json or {}
-    name = body.get("student_name", "").strip()
+@bp.route("/api/students/archive", methods=["POST"])
+def api_archive_student():
+    """Archive a student: marks as Removed with a required reason. Record is kept forever."""
+    body   = request.json or {}
+    name   = body.get("student_name", "").strip()
+    reason = body.get("reason", "").strip()
     if not name:
         return jsonify({"error": "student_name required"}), 400
-    students = load_students()
-    original_len = len(students)
-    students = [s for s in students if s.get("student_name") != name]
-    if len(students) == original_len:
+    if not reason:
+        return jsonify({"error": "reason is required"}), 400
+    found = archive_student(name, reason)
+    if not found:
         return jsonify({"error": f"Student '{name}' not found"}), 404
-    save_students(students)
     return jsonify({"ok": True})

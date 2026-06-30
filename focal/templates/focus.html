@@ -477,6 +477,7 @@ function switchFocusTab(tab) {
 window._focusSelectedTask = null;
 window._focusAllSort      = "due";
 window._focusAllProject   = "";
+window._focusProjects     = null;  // loaded once by loadFocus()
 
 function onFocusTaskSelect(radio) {
   window._focusSelectedTask = JSON.parse(radio.dataset.task);
@@ -520,10 +521,20 @@ function editTask(wsId) {
   const radio = card.querySelector("input[type='radio']");
   const t = JSON.parse(radio.dataset.task);
   const body = card.querySelector(".task-body");
+
+  const projects = window._focusProjects || [];
+  const projOptions = projects.map(p =>
+    `<option value="${escHtml(p.source_db_id)}"${p.source_db_id === t.source_db_id ? " selected" : ""}>${escHtml(p.project_name)}</option>`
+  ).join("");
+  const projRow = projects.length > 1
+    ? `<select id="edit-project-${wsId}" class="edit-input" title="Move to a different project">${projOptions}</select>`
+    : "";
+
   body.innerHTML = `
     <div class="edit-form">
       <input type="text"  id="edit-name-${wsId}" class="edit-input" value="${escHtml(t.name)}" placeholder="Task name">
       <input type="date"  id="edit-date-${wsId}" class="edit-input" value="${t.planned_end || ""}">
+      ${projRow}
       <div class="edit-actions">
         <button class="btn btn-primary"   style="padding:5px 12px;font-size:12px"
           onclick="saveTaskEdit('${wsId}')">Save</button>
@@ -539,14 +550,37 @@ async function saveTaskEdit(wsId) {
   const newDue  = (document.getElementById(`edit-date-${wsId}`) || {}).value || "";
   if (!newName.trim()) { alert("Task name cannot be empty."); return; }
 
+  // Read current task data so we can detect a project change
+  const card  = document.querySelector(`.task-card[data-wsid="${wsId}"]`);
+  const radio = card ? card.querySelector("input[type='radio']") : null;
+  const t     = radio ? JSON.parse(radio.dataset.task) : {};
+
+  const projEl         = document.getElementById(`edit-project-${wsId}`);
+  const newProject     = projEl ? projEl.value : "";
+  const projectChanged = newProject && newProject !== t.source_db_id;
+
   const saveBtn = document.querySelector(`.task-card[data-wsid="${wsId}"] .btn-primary`);
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
 
   try {
-    const res  = await fetch("/api/push-to-wbs", {
+    let url, payload;
+    if (projectChanged) {
+      url     = "/api/move-task-project";
+      payload = {
+        ws_id:               wsId,
+        target_source_db_id: newProject,
+        new_task_name:       newName.trim(),
+        new_due_date:        newDue || null,
+      };
+    } else {
+      url     = "/api/push-to-wbs";
+      payload = {work_session_id: wsId, new_task_name: newName.trim(), new_due_date: newDue};
+    }
+
+    const res  = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({work_session_id: wsId, new_task_name: newName.trim(), new_due_date: newDue})
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (data.error) {
@@ -585,6 +619,17 @@ async function loadFocus() {
       `Cache: ${genAt} · ${data.cache_task_count} tasks total`;
 
     window._focusData = data;
+
+    // Load project list once for the project-move picker in editTask()
+    if (window._focusProjects === null) {
+      try {
+        const pr = await fetch("/api/project-sources");
+        const pd = await pr.json();
+        window._focusProjects = pd.sources || [];
+      } catch(_) {
+        window._focusProjects = [];
+      }
+    }
 
     if (total === 0 && allCount === 0) {
       main.innerHTML = `<div class="all-clear">🎉<p>No tasks due or overdue. Enjoy the breathing room!</p></div>`;

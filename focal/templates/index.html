@@ -889,6 +889,7 @@
       <button class="btn btn-ghost" id="sf-Transferred" onclick="setStudentFilter('Transferred')" style="font-size:12px;padding:5px 12px;">Transferred</button>
       <button class="btn btn-ghost" id="sf-On Hold"    onclick="setStudentFilter('On Hold')"    style="font-size:12px;padding:5px 12px;">On Hold</button>
       <button class="btn btn-ghost" id="sf-All"        onclick="setStudentFilter('All')"        style="font-size:12px;padding:5px 12px;">All</button>
+      <button class="btn btn-ghost" id="sf-Removed"    onclick="setStudentFilter('Removed')"    style="font-size:12px;padding:5px 12px;color:#9ca3af;">Removed</button>
     </div>
 
     <div id="students-table-wrap" style="overflow-x:auto;">
@@ -1028,6 +1029,36 @@
         <button id="sm-save-btn" class="btn btn-primary" onclick="saveStudentModal()">Save</button>
       </div>
       <div id="sm-status-msg" style="margin-top:10px;font-size:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Archive (remove) student modal -->
+  <div id="archive-student-backdrop"
+       style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;
+              align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:28px;width:440px;max-width:95vw;
+                box-shadow:0 8px 32px rgba(0,0,0,.22);">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">
+        <span style="font-size:20px;line-height:1;">🗑</span>
+        <div>
+          <div style="font-size:15px;font-weight:600;color:#c53030;margin-bottom:4px;">Remove Student</div>
+          <div style="font-size:13px;color:#2d3748;">
+            Removing <strong id="archive-student-name"></strong> from the active list.
+            The record is kept permanently with your reason.
+          </div>
+        </div>
+      </div>
+      <div class="field-group" style="margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;">Reason for removal <span class="mapping-req">*</span></label>
+        <textarea id="archive-reason" placeholder="e.g. Graduated May 2026, Transferred to another program…"
+                  style="min-height:72px;font-size:13px;"></textarea>
+      </div>
+      <div id="archive-student-msg" style="display:none;font-size:12px;color:#e53e3e;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" style="font-size:13px;" onclick="closeArchiveStudentModal()">Cancel</button>
+        <button class="btn" style="background:#c53030;color:#fff;border-color:#c53030;font-size:13px;"
+                onclick="confirmArchiveStudent()">Remove Student</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3444,8 +3475,7 @@ function escHtml(str) {
 // ── Students tab ──────────────────────────────────────────────────────────────
 function refreshStudentsTab() {
   const filter = state.studentsFilter;
-  // Update filter button active state
-  ["Active","Graduated","Transferred","On Hold","All"].forEach(f => {
+  ["Active","Graduated","Transferred","On Hold","All","Removed"].forEach(f => {
     const btn = document.getElementById("sf-" + f);
     if (btn) btn.classList.toggle("active", f === filter);
   });
@@ -3454,8 +3484,11 @@ function refreshStudentsTab() {
   if (!tbody) return;
   tbody.innerHTML = "";
 
+  // "All" excludes Removed; "Removed" shows only Removed
   const filtered = filter === "All"
-    ? state.students
+    ? state.students.filter(s => (s.status || "Active") !== "Removed")
+    : filter === "Removed"
+    ? state.students.filter(s => s.status === "Removed")
     : state.students.filter(s => (s.status || "Active") === filter);
 
   if (!filtered.length) {
@@ -3463,8 +3496,29 @@ function refreshStudentsTab() {
     return;
   }
 
+  const isRemoved = filter === "Removed";
+
   for (const s of filtered) {
     const tr = document.createElement("tr");
+    tr.style.opacity = isRemoved ? "0.65" : "1";
+
+    let actionCell;
+    if (isRemoved) {
+      const when = s.removed_at ? ` on ${escHtml(s.removed_at)}` : "";
+      const why  = s.removal_reason ? escHtml(s.removal_reason) : "";
+      actionCell = `<td style="font-size:11px;color:#718096;max-width:200px;">
+                      <em>Removed${when}</em>${why ? `<br>${why}` : ""}
+                    </td>`;
+    } else {
+      const nameJson = escHtml(JSON.stringify(s.student_name));
+      actionCell =
+        `<td style="white-space:nowrap;">` +
+        `<button class="btn-sm" onclick="showStudentModal(${nameJson})">Edit</button>` +
+        ` <button class="btn-sm" style="color:#c53030;border-color:#fc8181;"
+                 onclick="showArchiveStudentModal(${nameJson})">Remove</button>` +
+        `</td>`;
+    }
+
     tr.innerHTML =
       `<td>${escHtml(s.student_name)}</td>` +
       `<td>${escHtml(s.chair || "")}</td>` +
@@ -3473,13 +3527,57 @@ function refreshStudentsTab() {
       `<td>${escHtml(s.program || "")}</td>` +
       `<td>${escHtml(s.current_phase || "")}</td>` +
       `<td><span class="status-badge status-${(s.status||"Active").toLowerCase().replace(/\s+/g,"-")}">${escHtml(s.status || "Active")}</span></td>` +
-      `<td><button class="btn-sm" onclick="showStudentModal(${escHtml(JSON.stringify(s.student_name))})">Edit</button></td>`;
+      actionCell;
     tbody.appendChild(tr);
   }
 }
 
 function setStudentFilter(filter) {
   state.studentsFilter = filter;
+  refreshStudentsTab();
+}
+
+function showArchiveStudentModal(studentName) {
+  document.getElementById("archive-student-name").textContent = studentName;
+  document.getElementById("archive-reason").value = "";
+  document.getElementById("archive-student-msg").style.display = "none";
+  document.getElementById("archive-student-backdrop")._studentName = studentName;
+  document.getElementById("archive-student-backdrop").style.display = "flex";
+}
+
+function closeArchiveStudentModal() {
+  document.getElementById("archive-student-backdrop").style.display = "none";
+}
+
+async function confirmArchiveStudent() {
+  const name   = document.getElementById("archive-student-backdrop")._studentName;
+  const reason = (document.getElementById("archive-reason").value || "").trim();
+  const msg    = document.getElementById("archive-student-msg");
+
+  if (!reason) {
+    msg.textContent    = "Please enter a reason.";
+    msg.style.display  = "block";
+    return;
+  }
+
+  msg.style.display  = "none";
+  const res = await api("POST", "/api/students/archive", { student_name: name, reason });
+
+  if (res.error) {
+    msg.textContent   = res.error;
+    msg.style.display = "block";
+    return;
+  }
+
+  // Update local cache
+  const idx = state.students.findIndex(s => s.student_name === name);
+  if (idx !== -1) {
+    state.students[idx].status         = "Removed";
+    state.students[idx].removal_reason = reason;
+    state.students[idx].removed_at     = new Date().toISOString().slice(0, 10);
+  }
+
+  closeArchiveStudentModal();
   refreshStudentsTab();
 }
 

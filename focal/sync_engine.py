@@ -116,7 +116,7 @@ def regenerate_focus_cache(client: NotionClient) -> None:
     Strategy:
       1. Load sessions_mappings (has all task metadata — no per-task API calls).
       2. Batch-query Work Sessions to get current Status for each ws_id.
-      3. Emit tasks that have a planned_end and are not Completed.
+      3. Emit tasks that are not Completed (including those without a due date).
     """
     try:
         mappings = load_sessions_mappings()
@@ -151,7 +151,7 @@ def regenerate_focus_cache(client: NotionClient) -> None:
                 continue
             ws_id       = info.get("ws_id", "")
             planned_end = info.get("planned_end", "")
-            if not ws_id or not planned_end:
+            if not ws_id:
                 continue
 
             status = ws_status.get(ws_id, info.get("status", ""))
@@ -174,7 +174,8 @@ def regenerate_focus_cache(client: NotionClient) -> None:
                 "source_db_id": info.get("source_db_id", ""),
             })
 
-        tasks.sort(key=lambda t: t["planned_end"])
+        # Tasks with no due date sort to the end
+        tasks.sort(key=lambda t: t["planned_end"] or "9999-99-99")
         cache = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "task_count":   len(tasks),
@@ -381,10 +382,21 @@ def create_continuations_for_session_done(client: NotionClient) -> dict:
     created = skipped = 0
     errors: list[str] = []
 
+    # Maps old ws_id → new active-tail ws_id, collected across all chains.
+    # Used at the end to repair sessions_mappings entries that still point at
+    # a "Session Done" session when a continuation already exists.
+    ws_id_updates: dict[str, str] = {}
+
     for entries in chains.values():
         entries.sort(key=lambda e: e["n"])
         tail = entries[-1]
+
         if tail["status"] != "Session Done":
+            # Chain already has an active tail.  Record any earlier sessions
+            # in the chain so stale mapping entries get repaired below.
+            active_tail_id = tail["id"]
+            for e in entries[:-1]:
+                ws_id_updates[e["id"]] = active_tail_id
             skipped += 1
             continue
 
@@ -407,10 +419,25 @@ def create_continuations_for_session_done(client: NotionClient) -> dict:
             if wt:
                 cont_props["Work Type"] = {"select": {"name": wt}}
 
-            client.create_page({"database_id": WORK_SESSIONS_DB_ID}, cont_props)
+            new_ws = client.create_page({"database_id": WORK_SESSIONS_DB_ID}, cont_props)
+            # Point all earlier sessions in this chain at the new continuation.
+            new_ws_id = new_ws["id"]
+            for e in entries:
+                ws_id_updates[e["id"]] = new_ws_id
             created += 1
         except Exception as e:
             errors.append(f"WS {tail['id'][:8]} ({tail['name']}): {e}")
+
+    # Repair any mapping entries that still point at a superseded work session.
+    if ws_id_updates:
+        mappings = load_sessions_mappings()
+        changed  = False
+        for info in mappings.values():
+            if isinstance(info, dict) and info.get("ws_id") in ws_id_updates:
+                info["ws_id"] = ws_id_updates[info["ws_id"]]
+                changed = True
+        if changed:
+            save_sessions_mappings(mappings)
 
     return {"created": created, "skipped": skipped, "errors": errors}
 

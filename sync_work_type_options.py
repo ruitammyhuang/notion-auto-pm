@@ -117,13 +117,58 @@ def push_to_all_dbs(token: str | None = None, cfg: dict | None = None,
     return {"ok_count": ok_count, "fail_count": fail_count, "errors": errors}
 
 
+def push_to_single_db(db_id: str, col_name: str,
+                      token: str | None = None,
+                      cfg: dict | None = None,
+                      verbose: bool = False) -> dict:
+    """Push canonical work type options to a single DB.
+
+    Intended for freshly created DBs whose Work Type column is still empty.
+    A direct PATCH (without merge) is safe there and sets the correct colors.
+    Returns {"ok": bool}.
+    """
+    if cfg is None:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            cfg = json.load(f)
+    if token is None:
+        token = cfg.get("token", "")
+
+    headers = _make_headers(token)
+    options = get_work_type_options()
+
+    if verbose:
+        print(f"Pushing {len(options)} work type options to DB {db_id[:8]}... col '{col_name}'")
+
+    ok = _patch_select_options(db_id, col_name, options, headers)
+
+    if verbose:
+        print("  ok" if ok else "  FAIL")
+
+    return {"ok": ok}
+
+
 if __name__ == "__main__":
-    result = push_to_all_dbs(verbose=True)
-    if result["errors"]:
-        print("\nErrors:")
-        for e in result["errors"]:
-            print(f"  - {e}")
-    print()
-    print("Current Work Type options in effect:")
-    for opt in get_work_type_options():
-        print(f"  {opt['name']}")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Push work type options to Notion DBs")
+    parser.add_argument("--db-id", help="Push to a single DB by UUID (skips all other DBs)")
+    parser.add_argument("--col", default="Work Type",
+                        help="Column name in that DB (default: Work Type)")
+    args = parser.parse_args()
+
+    if args.db_id:
+        result = push_to_single_db(args.db_id, args.col, verbose=True)
+        print()
+        print("Current Work Type options in effect:")
+        for opt in get_work_type_options():
+            print(f"  {opt['name']}")
+    else:
+        result = push_to_all_dbs(verbose=True)
+        if result["errors"]:
+            print("\nErrors:")
+            for e in result["errors"]:
+                print(f"  - {e}")
+        print()
+        print("Current Work Type options in effect:")
+        for opt in get_work_type_options():
+            print(f"  {opt['name']}")

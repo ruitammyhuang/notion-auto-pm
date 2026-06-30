@@ -164,3 +164,17 @@ def update_student_phase(student_name: str, current_phase: str) -> bool:
             save_students(students)
             return True
     return False
+
+
+def archive_student(student_name: str, reason: str) -> bool:
+    """Mark a student as Removed, storing the reason and date permanently."""
+    from datetime import datetime
+    students = load_students()
+    for s in students:
+        if s.get("student_name") == student_name:
+            s["status"]         = "Removed"
+            s["removal_reason"] = reason.strip()
+            s["removed_at"]     = datetime.now().strftime("%Y-%m-%d")
+            save_students(students)
+            return True
+    return False
