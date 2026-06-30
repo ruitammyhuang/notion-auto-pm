@@ -257,9 +257,12 @@ def sync_due_dates_from_completed_sessions(
     if not ws_id_to_wbs:
         return {"updated": 0, "skipped": 0, "errors": []}
 
-    # Fetch all Work Sessions in one query
+    # Fetch only Completed Work Sessions
     try:
-        all_ws = client.query_db(WORK_SESSIONS_DB_ID)
+        all_ws = client.query_db(
+            WORK_SESSIONS_DB_ID,
+            filter_body={"property": "Status", "select": {"equals": "Completed"}},
+        )
     except Exception as e:
         return {"updated": 0, "skipped": 0, "errors": [f"Work Sessions query failed: {e}"]}
 

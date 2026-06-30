@@ -2,11 +2,6 @@
 routes/dashboard_routes.py  (focal — two-layer)
 ─────────────────────────────────────────────────
 Focus task list, workload dashboard, design doc pages.
-
-Key changes from v2:
-  - api_focus_tasks: uses ws_status from cache (no rollup fields needed)
-  - api_workload: Work Type read directly from Work Sessions Notion field
-  - api_writeback_dates: reads from sessions_mappings (no Master WBS query)
 """
 
 from __future__ import annotations
@@ -14,9 +9,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import time
 
-import requests
 from flask import Blueprint, jsonify, render_template, request
 
 from ..config import (
@@ -25,7 +18,7 @@ from ..config import (
     load_config,
     load_sessions_mappings,
 )
-from ..notion_client import NotionClient, extract, p_date
+from ..notion_client import NotionClient, extract
 from ..sync_engine import regenerate_focus_cache
 
 bp = Blueprint("dashboard", __name__)
@@ -282,64 +275,3 @@ def api_workload():
         "sessions":      result_sessions,
     })
 
-
-# ── Writeback dates ────────────────────────────────────────────────────────────
-
-@bp.route("/api/writeback-dates", methods=["POST"])
-def api_writeback_dates():
-    """
-    Read Planned End from sessions_mappings and write it back to the WBS task.
-
-    Two-layer simplification: metadata is in the local sessions_mappings file —
-    no Notion API query needed to find the dates.  Only patches WBS rows where
-    the date field name is known from config.
-    """
-    body  = request.json or {}
-    token = body.get("token", "").strip() or load_config().get("token", "").strip()
-    if not token:
-        return jsonify({"error": "No token"}), 400
-
-    mappings = load_sessions_mappings()
-    config   = load_config()
-    sources  = config.get("sources", {})
-
-    if not mappings:
-        return jsonify({"error": "No task mappings found — run a sync first"}), 400
-
-    client = NotionClient(token)
-    updated, skipped, errors = 0, 0, []
-
-    for wbs_id, info in mappings.items():
-        if not isinstance(info, dict) or info.get("deleted"):
-            continue
-
-        planned_end  = info.get("planned_end", "")
-        source_db_id = info.get("source_db_id", "")
-        if not planned_end or not source_db_id:
-            skipped += 1
-            continue
-
-        pe_field = sources.get(source_db_id, {}).get("field_map", {}).get("planned_end", "")
-        if not pe_field:
-            skipped += 1
-            continue
-
-        for attempt in range(2):
-            try:
-                r = client.patch_page(wbs_id, {"properties": {
-                    pe_field: p_date({"start": planned_end})
-                }})
-                r.raise_for_status()
-                updated += 1
-                break
-            except requests.exceptions.Timeout:
-                if attempt == 0:
-                    time.sleep(2)
-                    continue
-                errors.append(f"Timeout: page {wbs_id[:8]}")
-            except Exception as e:
-                errors.append(str(e))
-                break
-
-    return jsonify({"ok": True, "updated": updated,
-                    "skipped": skipped, "errors": errors[:5]})

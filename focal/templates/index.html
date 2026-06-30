@@ -354,36 +354,6 @@
 <!-- ── SYNC TAB ──────────────────────────────────────────────────────────── -->
 <div id="pane-sync" class="pane">
 
-  <div class="card" style="border-color:#c7d2fe;background:#eef2ff;">
-    <h3 style="color:#3730a3;">↩ Write-back Dates to Project WBS</h3>
-    <div class="hint" style="color:#4338ca;">
-      Reads the current Planned Start and Due Date from every task in Master WBS Tasks
-      and writes them back to the matching row in each Project WBS database.
-      Run this after rescheduling tasks in Master WBS so both tables stay in sync.
-    </div>
-    <div class="row" style="margin-top:0;">
-      <button class="btn" style="background:#4f46e5;color:#fff;" id="writeback-btn" onclick="runWriteback()">
-        ↩ Write-back Dates
-      </button>
-      <span id="writeback-status" style="font-size:13px;color:#666;"></span>
-    </div>
-  </div>
-
-  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
-    <h3 style="color:#92400e;">🧹 Deduplicate Work Sessions</h3>
-    <div class="hint" style="color:#78350f;">
-      Scans the entire Work Sessions database and removes duplicate rows for the same task.
-      Sessions with a logged start/end time are always kept. Empty duplicates are archived.
-      Run this once to clean up existing duplicates; future syncs won't create new ones.
-    </div>
-    <div class="row" style="margin-top:0;">
-      <button class="btn" style="background:#d97706;color:#fff;" id="dedup-btn" onclick="runDedup()">
-        🧹 Remove Duplicates
-      </button>
-      <span id="dedup-status" style="font-size:13px;color:#666;"></span>
-    </div>
-  </div>
-
   <div class="card">
     <h3>Sync to Master WBS Tasks</h3>
     <div class="hint">
@@ -2154,71 +2124,6 @@ async function runSync() {
   document.getElementById("result-box").classList.add("show");
 }
 
-
-// ── Deduplication ────────────────────────────────────────────────────────────
-async function runDedup() {
-  if (!state.token) { alert("Set your token in the Setup tab first."); return; }
-  const btn = document.getElementById("dedup-btn");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> Scanning…';
-  setStatus("dedup-status", "");
-
-  const res = await api("POST", "/api/deduplicate", {token: state.token});
-
-  btn.disabled = false;
-  btn.innerHTML = "🧹 Remove Duplicates";
-
-  if (res.error) {
-    setStatus("dedup-status", "✗ " + res.error, "red");
-    return;
-  }
-
-  const totalArchived = (res.master_dupes_archived || 0) + (res.ws_archived || 0);
-  let msg;
-  if (totalArchived === 0) {
-    msg = `✓ No duplicates found — ${res.kept} session(s) all clean`;
-  } else {
-    const parts = [];
-    if (res.master_dupes_archived > 0)
-      parts.push(`${res.master_dupes_archived} duplicate task(s) in Master WBS`);
-    if (res.ws_archived > 0)
-      parts.push(`${res.ws_archived} duplicate Work Session(s)`);
-    msg = `✓ Archived: ${parts.join(" · ")} · ${res.kept} session(s) kept`;
-  }
-
-  if (res.no_task_sessions > 0) {
-    msg += ` · ⚠️ ${res.no_task_sessions} unlinked session(s) skipped`;
-  }
-  if (res.errors && res.errors.length) {
-    msg += ` · ❌ ${res.errors.length} error(s): ${res.errors.slice(0,3).join("; ")}`;
-    setStatus("dedup-status", msg, "red");
-  } else {
-    setStatus("dedup-status", msg, totalArchived > 0 ? "green" : res.no_task_sessions > 0 ? "orange" : "green");
-  }
-}
-
-async function runWriteback() {
-  if (!state.token) { alert("Set your token in the Setup tab first."); return; }
-  const btn = document.getElementById("writeback-btn");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3)"></span> Writing back…';
-  setStatus("writeback-status", "");
-
-  const res = await api("POST", "/api/writeback-dates", {token: state.token});
-
-  btn.disabled = false;
-  btn.innerHTML = "↩ Write-back Dates";
-
-  if (res.error) {
-    setStatus("writeback-status", "✗ " + res.error, "red");
-    return;
-  }
-  let msg = `✓ ${res.updated} task(s) updated`;
-  if (res.skipped) msg += ` · ${res.skipped} skipped (no mapping or field)`;
-  if (res.errors && res.errors.length)
-    msg += ` · ❌ ${res.errors.length} error(s): ${res.errors.slice(0,2).join("; ")}`;
-  setStatus("writeback-status", msg, res.errors?.length ? "orange" : "green");
-}
 
 // ── Check Existing Tasks ──────────────────────────────────────────────────────
 window._qsSelectedTask = null;
