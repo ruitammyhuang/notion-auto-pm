@@ -108,7 +108,7 @@ def _get_title(props: dict) -> str:
 
 
 # ── Focus cache ────────────────────────────────────────────────────────────────
-def regenerate_focus_cache(client: NotionClient) -> None:
+def regenerate_focus_cache(client: NotionClient) -> dict:
     """
     Rebuild focus-task-list-cache.json from the sessions mapping + live
     Work Session statuses.
@@ -116,76 +116,105 @@ def regenerate_focus_cache(client: NotionClient) -> None:
     Strategy:
       1. Load sessions_mappings (has all task metadata — no per-task API calls).
       2. Batch-query Work Sessions to get current Status for each ws_id.
-      3. Emit tasks that are not Completed (including those without a due date).
-    """
-    try:
-        mappings = load_sessions_mappings()
-        if not mappings:
-            _write_empty_cache()
-            return
+      3. For any ws_id not returned by the bulk query (e.g. archived in Notion),
+         fetch the WS page individually to check archived state and actual status.
+      4. Emit tasks that are not Completed (including those without a due date).
 
-        # Collect all ws_ids we care about
-        ws_id_to_wbs: dict[str, str] = {}
+    Raises on failure — callers are responsible for catching and surfacing errors.
+    Returns {"task_count": N, "excluded_count": M}.
+    """
+    mappings = load_sessions_mappings()
+    if not mappings:
+        _write_empty_cache()
+        return {"task_count": 0, "excluded_count": 0}
+
+    # Collect all ws_ids we care about
+    ws_id_to_wbs: dict[str, str] = {}
+    for wbs_id, info in mappings.items():
+        if isinstance(info, dict) and info.get("ws_id"):
+            ws_id_to_wbs[info["ws_id"]] = wbs_id
+
+    # Bulk-query Work Sessions for current Status
+    ws_status: dict[str, str] = {}
+    bulk_ok = False
+    try:
+        all_ws = client.query_db(WORK_SESSIONS_DB_ID)
+        for ws in all_ws:
+            ws_status[ws["id"]] = extract(ws.get("properties", {}).get("Status", {})) or ""
+        bulk_ok = True
+    except Exception as e:
+        # Bulk query failed — fall back to status stored in local mappings
+        print(f"[focus-cache] Work Sessions bulk query failed: {e}")
         for wbs_id, info in mappings.items():
             if isinstance(info, dict) and info.get("ws_id"):
-                ws_id_to_wbs[info["ws_id"]] = wbs_id
+                ws_status[info["ws_id"]] = info.get("status", "")
 
-        # One query to get current Status of all Work Sessions
-        ws_status: dict[str, str] = {}
-        try:
-            all_ws = client.query_db(WORK_SESSIONS_DB_ID)
-            for ws in all_ws:
-                ws_status[ws["id"]] = extract(ws.get("properties", {}).get("Status", {})) or ""
-        except Exception as e:
-            print(f"[focus-cache] Work Sessions query failed: {e}")
-            # Fall back to status stored in local mappings (from last sync)
-            for wbs_id, info in mappings.items():
-                if isinstance(info, dict) and info.get("ws_id"):
-                    ws_status[info["ws_id"]] = info.get("status", "")
+    # For WS IDs not returned by the bulk query (bulk succeeded but specific
+    # page missing — most likely archived in Notion), fetch individually.
+    if bulk_ok:
+        missing = set(ws_id_to_wbs) - set(ws_status)
+        for ws_id in missing:
+            try:
+                r = client.get_page(ws_id)
+                if not r.ok:
+                    # 404 or permission error — treat as completed/removed
+                    ws_status[ws_id] = "Completed"
+                    continue
+                page = r.json()
+                if page.get("archived"):
+                    ws_status[ws_id] = "Completed"
+                else:
+                    ws_status[ws_id] = (
+                        extract(page.get("properties", {}).get("Status", {})) or ""
+                    )
+            except Exception as e:
+                print(f"[focus-cache] Individual WS fetch failed for {ws_id}: {e}")
 
-        tasks = []
-        for wbs_id, info in mappings.items():
-            if not isinstance(info, dict):
-                continue
-            if info.get("deleted"):
-                continue
-            ws_id       = info.get("ws_id", "")
-            planned_end = info.get("planned_end", "")
-            if not ws_id:
-                continue
+    tasks = []
+    excluded = 0
+    for wbs_id, info in mappings.items():
+        if not isinstance(info, dict):
+            continue
+        if info.get("deleted"):
+            excluded += 1
+            continue
+        ws_id       = info.get("ws_id", "")
+        planned_end = info.get("planned_end", "")
+        if not ws_id:
+            continue
 
-            status = ws_status.get(ws_id, info.get("status", ""))
-            if status in ("Completed", "Session Done"):
-                continue
+        status = ws_status.get(ws_id, info.get("status", ""))
+        if status in ("Completed", "Session Done"):
+            excluded += 1
+            continue
 
-            wbs_clean = wbs_id.replace("-", "")
-            ws_clean  = ws_id.replace("-", "")
-            tasks.append({
-                "id":           wbs_id,
-                "url":          f"https://app.notion.com/p/{wbs_clean}",
-                "ws_id":        ws_id,
-                "ws_url":       f"https://app.notion.com/p/{ws_clean}",
-                "name":         info.get("name", ""),
-                "planned_end":  planned_end,
-                "priority":     info.get("priority", "Normal") or "Normal",
-                "work_type":    info.get("work_type", ""),
-                "project_name": info.get("project_name", ""),
-                "ws_status":    status,
-                "source_db_id": info.get("source_db_id", ""),
-            })
+        wbs_clean = wbs_id.replace("-", "")
+        ws_clean  = ws_id.replace("-", "")
+        tasks.append({
+            "id":           wbs_id,
+            "url":          f"https://app.notion.com/p/{wbs_clean}",
+            "ws_id":        ws_id,
+            "ws_url":       f"https://app.notion.com/p/{ws_clean}",
+            "name":         info.get("name", ""),
+            "planned_end":  planned_end,
+            "priority":     info.get("priority", "Normal") or "Normal",
+            "work_type":    info.get("work_type", ""),
+            "project_name": info.get("project_name", ""),
+            "ws_status":    status,
+            "source_db_id": info.get("source_db_id", ""),
+        })
 
-        # Tasks with no due date sort to the end
-        tasks.sort(key=lambda t: t["planned_end"] or "9999-99-99")
-        cache = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "task_count":   len(tasks),
-            "tasks":        tasks,
-        }
-        with open(FOCUS_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache, f, indent=2, ensure_ascii=False)
+    # Tasks with no due date sort to the end
+    tasks.sort(key=lambda t: t["planned_end"] or "9999-99-99")
+    cache = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "task_count":   len(tasks),
+        "tasks":        tasks,
+    }
+    with open(FOCUS_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, ensure_ascii=False)
 
-    except Exception as e:
-        print(f"[focus-cache] regeneration failed: {e}")
+    return {"task_count": len(tasks), "excluded_count": excluded}
 
 
 def _write_empty_cache() -> None:

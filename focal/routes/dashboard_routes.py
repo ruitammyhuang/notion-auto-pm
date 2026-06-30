@@ -110,8 +110,8 @@ def api_regenerate_focus_cache():
     if not token:
         return jsonify({"error": "No token"}), 400
     try:
-        regenerate_focus_cache(NotionClient(token))
-        return jsonify({"ok": True})
+        result = regenerate_focus_cache(NotionClient(token))
+        return jsonify({"ok": True, **result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

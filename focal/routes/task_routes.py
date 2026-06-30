@@ -383,7 +383,10 @@ def api_log_session():
             continuation_ws_url  = None
             continuation_ws_name = None
 
-        regenerate_focus_cache(client)
+        try:
+            regenerate_focus_cache(client)
+        except Exception as _cache_err:
+            print(f"[log-session] focus-cache rebuild failed: {_cache_err}")
         response = {"ok": True, "ws_url": ws_url}
         if continuation_ws_url:
             response["continuation_ws_url"]  = continuation_ws_url

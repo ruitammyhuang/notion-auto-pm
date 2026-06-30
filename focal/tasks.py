@@ -220,7 +220,10 @@ def quick_add_task(
     }
     save_sessions_mappings(sessions_mappings)
 
-    regenerate_focus_cache(client)
+    try:
+        regenerate_focus_cache(client)
+    except Exception as e:
+        print(f"[tasks] focus-cache rebuild after task creation failed: {e}")
 
     result = {
         "wbs_url":    wbs_page.get("url", ""),

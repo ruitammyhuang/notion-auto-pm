@@ -658,6 +658,15 @@ async function rebuildCache() {
     const data = await res.json();
     if (data.error) { showError(data.error); return; }
     await loadFocus();
+    if (data.task_count !== undefined) {
+      const msg = `Cache rebuilt: ${data.task_count} active tasks (${data.excluded_count} excluded as completed/deleted).`;
+      const banner = document.createElement("div");
+      banner.style.cssText = "background:#d4edda;color:#155724;padding:8px 14px;border-radius:6px;margin-bottom:12px;font-size:0.9em;";
+      banner.textContent = msg;
+      const content = document.getElementById("main-content");
+      content.insertBefore(banner, content.firstChild);
+      setTimeout(() => banner.remove(), 6000);
+    }
   } catch(e) {
     showError(e.message);
   } finally {
